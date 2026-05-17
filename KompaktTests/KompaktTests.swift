@@ -11,18 +11,14 @@ struct KompaktTests {
         let jpeg = try write([0xFF, 0xD8, 0xFF, 0xE0, 0x00], named: "photo.bin", in: directory)
         let gif = try write([0x47, 0x49, 0x46, 0x38, 0x39, 0x61], named: "loop.data", in: directory)
         let webp = try write(Array("RIFF".utf8) + [0x00, 0x00, 0x00, 0x00] + Array("WEBP".utf8), named: "picture.bin", in: directory)
-        let pdf = try write(Array("%PDF-1.7".utf8), named: "doc.bin", in: directory)
         let mp4 = try write([0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70], named: "clip.mp4", in: directory)
-        let svg = try write(Array("<svg></svg>".utf8), named: "icon.svg", in: directory)
         let bad = try write([0x00, 0x01, 0x02], named: "bad.png", in: directory)
 
         #expect(FileFormatDetector.detect(png) == .png)
         #expect(FileFormatDetector.detect(jpeg) == .jpeg)
         #expect(FileFormatDetector.detect(gif) == .gif)
         #expect(FileFormatDetector.detect(webp) == .webp)
-        #expect(FileFormatDetector.detect(pdf) == .pdf)
         #expect(FileFormatDetector.detect(mp4) == .mp4)
-        #expect(FileFormatDetector.detect(svg) == .svg)
         #expect(FileFormatDetector.detect(bad) == nil)
     }
 
@@ -50,19 +46,18 @@ struct KompaktTests {
 
         let png = try write([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A], named: "a.png", in: directory)
         let jpeg = try write([0xFF, 0xD8, 0xFF], named: "b.jpg", in: nested)
-        let pdf = try write(Array("%PDF-1.7".utf8), named: "c.pdf", in: nested)
         let movie = try write([0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70], named: "d.mov", in: nested)
         let webp = try write(Array("RIFF".utf8) + [0x00, 0x00, 0x00, 0x00] + Array("WEBP".utf8), named: "e.webp", in: nested)
+        _ = try write([0x00], named: "c.bin", in: nested)
         _ = try write([0x00], named: "notes.txt", in: nested)
 
         let files = Set(FileCollector.collectFiles(from: [directory]))
 
         #expect(files.contains(png.standardizedFileURL))
         #expect(files.contains(jpeg.standardizedFileURL))
-        #expect(files.contains(pdf.standardizedFileURL))
         #expect(files.contains(movie.standardizedFileURL))
         #expect(files.contains(webp.standardizedFileURL))
-        #expect(files.count == 5)
+        #expect(files.count == 4)
     }
 
     @Test func videoSummaryAndModesAreExplicit() throws {
@@ -77,14 +72,31 @@ struct KompaktTests {
         #expect(VideoCompressionMode.downscale720.maxHeight == 720)
     }
 
+    @Test func commandCatalogUsesBundledToolsForEachFormat() throws {
+        let catalog = OptimizerCommandCatalog()
+
+        #expect(catalog.commands(for: .png, mode: .lossless, videoMode: nil).map(\.tool) == [.oxipng, .optipng])
+        #expect(catalog.commands(for: .jpeg, mode: .lossless, videoMode: nil).map(\.tool) == [.jpegoptim, .jpegtran])
+        #expect(catalog.commands(for: .jpeg, mode: .smaller, videoMode: nil).map(\.tool).first == .mozjpeg)
+        #expect(catalog.commands(for: .gif, mode: .lossless, videoMode: nil).map(\.tool) == [.gifsicle])
+        #expect(catalog.commands(for: .webp, mode: .lossless, videoMode: nil).map(\.tool) == [.cwebp])
+        #expect(catalog.commands(for: .mp4, mode: .smaller, videoMode: .downscale720).map(\.tool) == [.ffmpeg])
+    }
+
+    @Test func toolExecutableNamesMatchBundledHelperNames() {
+        #expect(OptimizerTool.mozjpeg.executableNames == ["cjpeg"])
+        #expect(OptimizerTool.ffmpeg.executableNames == ["ffmpeg"])
+        #expect(OptimizerTool.imageIO.executableNames.isEmpty)
+    }
+
     @Test func externalDragClassifierAcceptsSupportedFileURLs() throws {
         let directory = try temporaryDirectory()
-        let pdf = try write(Array("%PDF-1.7".utf8), named: "drag.pdf", in: directory)
-        let item = pasteboardItem(fileURL: pdf)
+        let webp = try write(Array("RIFF".utf8) + [0x00, 0x00, 0x00, 0x00] + Array("WEBP".utf8), named: "drag.webp", in: directory)
+        let item = pasteboardItem(fileURL: webp)
 
         let urls = ExternalDragClassifier.supportedURLs(from: [item])
 
-        #expect(urls == [pdf.standardizedFileURL])
+        #expect(urls == [webp.standardizedFileURL])
     }
 
     @Test func externalDragClassifierAcceptsFoldersWithSupportedFiles() throws {

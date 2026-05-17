@@ -1,0 +1,4 @@
+// Copy this file to Config/LocalSigning.xcconfig and set your local signing team.
+// Do not commit Config/LocalSigning.xcconfig.
+
+DEVELOPMENT_TEAM = YOURTEAMID

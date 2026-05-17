@@ -24,16 +24,8 @@ enum FileFormatDetector {
             return .gif
         }
 
-        if bytes.starts(with: [0x25, 0x50, 0x44, 0x46, 0x2D]) {
-            return .pdf
-        }
-
         if isWebPHeader(bytes) {
             return .webp
-        }
-
-        if pathExtension == "svg" {
-            return .svg
         }
 
         if bytes.count >= 8,

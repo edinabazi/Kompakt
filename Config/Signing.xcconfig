@@ -1,0 +1,5 @@
+// Shared signing defaults.
+//
+// Personal signing settings belong in Config/LocalSigning.xcconfig.
+// That file is intentionally ignored by git.
+#include? "LocalSigning.xcconfig"

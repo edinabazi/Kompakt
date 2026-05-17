@@ -67,8 +67,6 @@ enum FileFormat: String {
     case jpeg
     case gif
     case webp
-    case svg
-    case pdf
     case mp4
     case mov
     case m4v
@@ -84,17 +82,15 @@ enum FileFormat: String {
         switch self {
         case .mp4, .mov, .m4v:
             true
-        case .png, .jpeg, .gif, .webp, .svg, .pdf:
+        case .png, .jpeg, .gif, .webp:
             false
         }
     }
 
     var optimizableKind: OptimizableFileKind {
         switch self {
-        case .png, .jpeg, .gif, .webp, .svg:
+        case .png, .jpeg, .gif, .webp:
             .image
-        case .pdf:
-            .pdf
         case .mp4, .mov, .m4v:
             .video
         }
@@ -104,7 +100,6 @@ enum FileFormat: String {
 enum OptimizableFileKind: Equatable {
     case image
     case video
-    case pdf
     case file
 
     func noun(isPlural: Bool) -> String {
@@ -113,8 +108,6 @@ enum OptimizableFileKind: Equatable {
             isPlural ? "images" : "image"
         case .video:
             isPlural ? "videos" : "video"
-        case .pdf:
-            isPlural ? "PDFs" : "PDF"
         case .file:
             isPlural ? "files" : "file"
         }

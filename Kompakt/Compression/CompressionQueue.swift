@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 
 actor CompressionQueue {
     private let runner = OptimizerCommandRunner()
+    private let commandCatalog = OptimizerCommandCatalog()
 
     func process(
         jobs: [CompressionJob],
@@ -69,7 +70,7 @@ actor CompressionQueue {
     }
 
     private func bestCandidate(for input: URL, format: FileFormat, mode: CompressionMode, videoMode: VideoCompressionMode?, tempURL: URL) async throws -> (url: URL, toolName: String)? {
-        let commands = commands(for: format, mode: mode, videoMode: videoMode)
+        let commands = commandCatalog.commands(for: format, mode: mode, videoMode: videoMode)
 
         for command in commands {
             if let output = try await runner.run(command, input: input, output: tempURL, mode: mode) {
@@ -82,188 +83,6 @@ actor CompressionQueue {
         }
 
         return nil
-    }
-
-    private func commands(for format: FileFormat, mode: CompressionMode, videoMode: VideoCompressionMode?) -> [OptimizerCommand] {
-        switch format {
-        case .png:
-            return [
-                OptimizerCommand(
-                    name: "oxipng",
-                    executableNames: ["oxipng"],
-                    arguments: { input, output, _ in ["--strip", "safe", "-o", "4", "--out", output.path, "--", input.path] },
-                    copiesInputFirst: false
-                ),
-                OptimizerCommand(
-                    name: "optipng",
-                    executableNames: ["optipng"],
-                    arguments: { _, output, _ in ["-quiet", "-o2", output.path] },
-                    copiesInputFirst: true
-                )
-            ]
-        case .jpeg:
-            var commands = [
-                OptimizerCommand(
-                    name: "jpegoptim",
-                    executableNames: ["jpegoptim"],
-                    arguments: { _, output, mode in
-                        var args = ["--strip-all", "--all-progressive"]
-                        if mode == .smaller {
-                            args.append("-m82")
-                        }
-                        args.append(output.path)
-                        return args
-                    },
-                    copiesInputFirst: true
-                ),
-                OptimizerCommand(
-                    name: "jpegtran",
-                    executableNames: ["jpegtran"],
-                    arguments: { input, output, _ in ["-copy", "none", "-optimize", "-progressive", "-outfile", output.path, input.path] },
-                    copiesInputFirst: false
-                )
-            ]
-            if mode == .smaller {
-                commands.insert(
-                    OptimizerCommand(
-                        name: "mozjpeg",
-                        executableNames: ["cjpeg"],
-                        arguments: { input, output, _ in ["-quality", "82", "-optimize", "-progressive", "-outfile", output.path, input.path] },
-                        copiesInputFirst: false
-                    ),
-                    at: 0
-                )
-            }
-            return commands
-        case .gif:
-            return [
-                OptimizerCommand(
-                    name: "gifsicle",
-                    executableNames: ["gifsicle"],
-                    arguments: { input, output, mode in
-                        var args = ["-O3", "--careful", "--no-comments", "--no-names", "-o", output.path, "--", input.path]
-                        if mode == .smaller {
-                            args.insert("--lossy=40", at: 0)
-                        }
-                        return args
-                    },
-                    copiesInputFirst: false
-                )
-            ]
-        case .webp:
-            return [
-                OptimizerCommand(
-                    name: "cwebp",
-                    executableNames: ["cwebp"],
-                    arguments: { input, output, mode in
-                        if mode == .lossless {
-                            return [
-                                "-quiet",
-                                "-mt",
-                                "-z", "9",
-                                "-metadata", "none",
-                                input.path,
-                                "-o", output.path
-                            ]
-                        }
-
-                        return [
-                            "-quiet",
-                            "-mt",
-                            "-m", "6",
-                            "-q", "82",
-                            "-alpha_q", "90",
-                            "-metadata", "none",
-                            input.path,
-                            "-o", output.path
-                        ]
-                    },
-                    copiesInputFirst: false
-                )
-            ]
-        case .svg:
-            return []
-        case .pdf:
-            return [
-                OptimizerCommand(
-                    name: "ghostscript",
-                    executableNames: ["gs"],
-                    arguments: { input, output, mode in
-                        var args = [
-                            "-dSAFER",
-                            "-sDEVICE=pdfwrite",
-                            "-dCompatibilityLevel=1.6",
-                            "-dPDFSETTINGS=\(mode == .smaller ? "/ebook" : "/prepress")",
-                            "-dDetectDuplicateImages=true",
-                            "-dCompressFonts=true",
-                            "-dSubsetFonts=true",
-                            "-dNOPAUSE",
-                            "-dQUIET",
-                            "-dBATCH",
-                            "-sOutputFile=\(output.path)",
-                        ]
-
-                        if mode == .smaller {
-                            args.append(contentsOf: [
-                                "-dDownsampleColorImages=true",
-                                "-dDownsampleGrayImages=true",
-                                "-dColorImageResolution=144",
-                                "-dGrayImageResolution=144"
-                            ])
-                        }
-
-                        args.append(input.path)
-                        return args
-                    },
-                    copiesInputFirst: false
-                )
-            ]
-        case .mp4, .mov, .m4v:
-            return [
-                OptimizerCommand(
-                    name: "ffmpeg",
-                    executableNames: ["ffmpeg"],
-                    arguments: { input, output, mode in
-                        if mode == .lossless {
-                            return [
-                                "-y", "-i", input.path,
-                                "-map", "0",
-                                "-c", "copy",
-                                "-map_metadata", "-1",
-                                "-movflags", "+faststart",
-                                output.path
-                            ]
-                        }
-
-                        let selectedVideoMode = videoMode ?? .sameResolution
-                        var args = [
-                            "-y", "-i", input.path,
-                            "-map", "0:v:0",
-                            "-map", "0:a?",
-                            "-c:v", "libx264",
-                            "-preset", "medium",
-                            "-crf", "25",
-                            "-pix_fmt", "yuv420p",
-                            "-c:a", "aac",
-                            "-b:a", "128k",
-                            "-map_metadata", "-1"
-                        ]
-
-                        if let maxHeight = selectedVideoMode.maxHeight {
-                            args.append(contentsOf: ["-vf", "scale=-2:min(ih\\,\(maxHeight))"])
-                        }
-
-                        args.append(contentsOf: [
-                            "-movflags", "+faststart",
-                            output.path
-                        ])
-
-                        return args
-                    },
-                    copiesInputFirst: false
-                )
-            ]
-        }
     }
 
     private func recompressWithImageIO(input: URL, output: URL, format: FileFormat) throws -> URL? {
@@ -322,5 +141,144 @@ actor CompressionQueue {
     private func fileSize(_ url: URL) throws -> Int64 {
         let values = try url.resourceValues(forKeys: [.fileSizeKey])
         return Int64(values.fileSize ?? 0)
+    }
+}
+
+struct OptimizerCommandCatalog {
+    func commands(for format: FileFormat, mode: CompressionMode, videoMode: VideoCompressionMode?) -> [OptimizerCommand] {
+        switch format {
+        case .png:
+            return [
+                OptimizerCommand(
+                    tool: .oxipng,
+                    arguments: { input, output, _ in ["--strip", "safe", "-o", "4", "--out", output.path, "--", input.path] },
+                    copiesInputFirst: false
+                ),
+                OptimizerCommand(
+                    tool: .optipng,
+                    arguments: { _, output, _ in ["-quiet", "-o2", output.path] },
+                    copiesInputFirst: true
+                )
+            ]
+        case .jpeg:
+            var commands = [
+                OptimizerCommand(
+                    tool: .jpegoptim,
+                    arguments: { _, output, mode in
+                        var args = ["--strip-all", "--all-progressive"]
+                        if mode == .smaller {
+                            args.append("-m82")
+                        }
+                        args.append(output.path)
+                        return args
+                    },
+                    copiesInputFirst: true
+                ),
+                OptimizerCommand(
+                    tool: .jpegtran,
+                    arguments: { input, output, _ in ["-copy", "none", "-optimize", "-progressive", "-outfile", output.path, input.path] },
+                    copiesInputFirst: false
+                )
+            ]
+            if mode == .smaller {
+                commands.insert(
+                    OptimizerCommand(
+                        tool: .mozjpeg,
+                        arguments: { input, output, _ in ["-quality", "82", "-optimize", "-progressive", "-outfile", output.path, input.path] },
+                        copiesInputFirst: false
+                    ),
+                    at: 0
+                )
+            }
+            return commands
+        case .gif:
+            return [
+                OptimizerCommand(
+                    tool: .gifsicle,
+                    arguments: { input, output, mode in
+                        var args = ["-O3", "--careful", "--no-comments", "--no-names", "-o", output.path, "--", input.path]
+                        if mode == .smaller {
+                            args.insert("--lossy=40", at: 0)
+                        }
+                        return args
+                    },
+                    copiesInputFirst: false
+                )
+            ]
+        case .webp:
+            return [
+                OptimizerCommand(
+                    tool: .cwebp,
+                    arguments: { input, output, mode in
+                        if mode == .lossless {
+                            return [
+                                "-quiet",
+                                "-mt",
+                                "-z", "9",
+                                "-metadata", "none",
+                                input.path,
+                                "-o", output.path
+                            ]
+                        }
+
+                        return [
+                            "-quiet",
+                            "-mt",
+                            "-m", "6",
+                            "-q", "82",
+                            "-alpha_q", "90",
+                            "-metadata", "none",
+                            input.path,
+                            "-o", output.path
+                        ]
+                    },
+                    copiesInputFirst: false
+                )
+            ]
+        case .mp4, .mov, .m4v:
+            return [
+                OptimizerCommand(
+                    tool: .ffmpeg,
+                    arguments: { input, output, mode in
+                        if mode == .lossless {
+                            return [
+                                "-y", "-i", input.path,
+                                "-map", "0",
+                                "-c", "copy",
+                                "-map_metadata", "-1",
+                                "-movflags", "+faststart",
+                                output.path
+                            ]
+                        }
+
+                        let selectedVideoMode = videoMode ?? .sameResolution
+                        var args = [
+                            "-y", "-i", input.path,
+                            "-map", "0:v:0",
+                            "-map", "0:a?",
+                            "-c:v", "libx264",
+                            "-preset", "medium",
+                            "-crf", "25",
+                            "-pix_fmt", "yuv420p",
+                            "-c:a", "aac",
+                            "-b:a", "128k",
+                            "-map_metadata", "-1"
+                        ]
+
+                        if let maxHeight = selectedVideoMode.maxHeight {
+                            args.append(contentsOf: ["-vf", "scale=-2:min(ih\\,\(maxHeight))"])
+                        }
+
+                        args.append(contentsOf: [
+                            "-movflags", "+faststart",
+                            output.path
+                        ])
+
+                        return args
+                    },
+                    copiesInputFirst: false
+                )
+            ]
+        }
     }
 }

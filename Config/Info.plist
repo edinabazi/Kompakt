@@ -21,32 +21,7 @@
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>CFBundleDocumentTypes</key>
-	<array>
-		<dict>
-			<key>CFBundleTypeName</key>
-			<string>Image File</string>
-			<key>CFBundleTypeExtensions</key>
-			<array>
-				<string>png</string>
-				<string>jpg</string>
-				<string>jpeg</string>
-				<string>jpe</string>
-				<string>gif</string>
-				<string>webp</string>
-				<string>svg</string>
-			</array>
-			<key>CFBundleTypeRole</key>
-			<string>Editor</string>
-			<key>LSHandlerRank</key>
-			<string>Default</string>
-			<key>LSItemContentTypes</key>
-			<array>
-				<string>public.image</string>
-				<string>public.webp</string>
-				<string>org.webmproject.webp</string>
-				<string>public.svg-image</string>
-			</array>
-		</dict>
+		<array>
 		<dict>
 			<key>CFBundleTypeName</key>
 			<string>PNG Image</string>
@@ -132,46 +107,6 @@
 		</dict>
 			<dict>
 				<key>CFBundleTypeName</key>
-				<string>SVG Image</string>
-				<key>CFBundleTypeExtensions</key>
-				<array>
-					<string>svg</string>
-				</array>
-				<key>CFBundleTypeMIMETypes</key>
-				<array>
-					<string>image/svg+xml</string>
-				</array>
-				<key>CFBundleTypeRole</key>
-				<string>Editor</string>
-				<key>LSHandlerRank</key>
-				<string>Default</string>
-				<key>LSItemContentTypes</key>
-				<array>
-					<string>public.svg-image</string>
-				</array>
-		</dict>
-			<dict>
-				<key>CFBundleTypeName</key>
-				<string>PDF Document</string>
-				<key>CFBundleTypeExtensions</key>
-				<array>
-					<string>pdf</string>
-				</array>
-				<key>CFBundleTypeMIMETypes</key>
-				<array>
-					<string>application/pdf</string>
-				</array>
-				<key>CFBundleTypeRole</key>
-				<string>Editor</string>
-				<key>LSHandlerRank</key>
-				<string>Default</string>
-				<key>LSItemContentTypes</key>
-				<array>
-					<string>com.adobe.pdf</string>
-				</array>
-		</dict>
-			<dict>
-				<key>CFBundleTypeName</key>
 				<string>Video File</string>
 				<key>CFBundleTypeExtensions</key>
 				<array>
@@ -183,13 +118,12 @@
 				<string>Editor</string>
 				<key>LSHandlerRank</key>
 				<string>Default</string>
-				<key>LSItemContentTypes</key>
-				<array>
-					<string>public.movie</string>
-					<string>public.mpeg-4</string>
-					<string>com.apple.quicktime-movie</string>
-					<string>com.apple.m4v-video</string>
-				</array>
+					<key>LSItemContentTypes</key>
+					<array>
+						<string>public.mpeg-4</string>
+						<string>com.apple.quicktime-movie</string>
+						<string>com.apple.m4v-video</string>
+					</array>
 		</dict>
 			<dict>
 				<key>CFBundleTypeName</key>

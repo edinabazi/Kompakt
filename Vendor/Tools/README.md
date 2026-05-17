@@ -28,11 +28,12 @@ Bundled helper names:
 - `cwebp`
 - `gifsicle`
 - `ffmpeg`
-- `gs`
 - `libjpeg.62.dylib`
 - `libjpeg.8.dylib`
 - `libpng16.16.dylib`
 
 `fetch-oxipng.sh` refreshes the Rust-distributed `oxipng` release. `fetch-webp-tools.sh` refreshes Google's statically linked `cwebp` release from the official WebP archives. `fetch-ffmpeg-tools.sh` refreshes the static macOS `ffmpeg` helper. `fetch-optimizer-tools.sh` vendors the remaining image helpers from Homebrew bottles into this repo for direct distribution builds. Homebrew is only a maintainer-side fetch mechanism; the built app does not call or require it.
 
-PDF and video optimisation require bundled `gs` and `ffmpeg` binaries in `macos-universal`. The app intentionally does not use system installs or native fallbacks for those formats.
+Video optimisation requires a bundled `ffmpeg` binary in `macos-universal`. The app intentionally does not use system installs or native fallbacks for supported formats.
+
+Run `Scripts/verify-bundled-tools.sh` before shipping a release.
