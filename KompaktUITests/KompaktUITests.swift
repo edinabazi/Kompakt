@@ -5,6 +5,7 @@
 //  Created by edin on 16/05/2026.
 //
 
+import AppKit
 import XCTest
 
 final class KompaktUITests: XCTestCase {
@@ -24,20 +25,35 @@ final class KompaktUITests: XCTestCase {
 
     @MainActor
     func testExample() throws {
-        // UI tests must launch the application that they test.
         let app = XCUIApplication()
+        app.launchEnvironment["KOMPAKT_DISABLE_EXTERNAL_DRAG_MONITOR"] = "1"
         app.launch()
+        terminateKompaktAfterTest()
 
-        // Use XCTAssert and related functions to verify your tests produce the correct results.
-        // XCUIAutomation Documentation
-        // https://developer.apple.com/documentation/xcuiautomation
+        XCTAssertTrue(app.isRunning)
     }
 
     @MainActor
-    func testLaunchPerformance() throws {
-        // This measures how long it takes to launch your application.
-        measure(metrics: [XCTApplicationLaunchMetric()]) {
-            XCUIApplication().launch()
+    func testDocklessAppLaunches() throws {
+        let app = XCUIApplication()
+        app.launchEnvironment["KOMPAKT_DISABLE_EXTERNAL_DRAG_MONITOR"] = "1"
+        app.launch()
+        terminateKompaktAfterTest()
+
+        XCTAssertTrue(app.isRunning)
+    }
+
+    private func terminateKompaktAfterTest() {
+        addTeardownBlock {
+            NSRunningApplication
+                .runningApplications(withBundleIdentifier: "com.edinabazi.Kompakt")
+                .forEach { $0.forceTerminate() }
         }
+    }
+}
+
+private extension XCUIApplication {
+    var isRunning: Bool {
+        state == .runningForeground || state == .runningBackground
     }
 }
