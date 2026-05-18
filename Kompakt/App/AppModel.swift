@@ -7,7 +7,7 @@ import SwiftUI
 final class AppModel: ObservableObject {
     static let shared = AppModel()
 
-    @AppStorage("compressionMode") var compressionMode: CompressionMode = .ask
+    @AppStorage("compressionMode") var compressionMode: CompressionMode = .smaller
     @AppStorage("outputMode") var outputMode: OutputMode = .replaceOriginals
     @AppStorage("defaultVideoMode") var defaultVideoMode: VideoCompressionMode = .sameResolution
     @AppStorage("showEscapeHint") var showEscapeHint = true
@@ -25,7 +25,11 @@ final class AppModel: ObservableObject {
     private weak var externalDropZoneController: ExternalDropZoneController?
     private var pendingAskURLs: [URL] = []
 
-    private init() {}
+    private init() {
+        if compressionMode == .ask {
+            compressionMode = .smaller
+        }
+    }
 
     var completedJobs: [CompressionJob] {
         jobs.filter { $0.status.isFinished }
@@ -205,6 +209,22 @@ final class AppModel: ObservableObject {
         }
     }
 
+    func revert(job: CompressionJob) {
+        guard let index = jobs.firstIndex(where: { $0.id == job.id }),
+              jobs[index].result != nil else {
+            lastMessage = "Nothing to revert."
+            return
+        }
+
+        do {
+            try revertJob(at: index)
+            lastMessage = "Reverted \(job.displayName)."
+            updateProgress()
+        } catch {
+            lastMessage = "Revert failed: \(error.localizedDescription)"
+        }
+    }
+
     func showExternalDropZone() {
         externalDropZoneController?.show()
     }
@@ -229,6 +249,37 @@ final class AppModel: ObservableObject {
         } catch {
             lastMessage = "Open at Login failed: \(error.localizedDescription)"
         }
+    }
+
+    private func revertJob(at index: Int) throws {
+        guard let result = jobs[index].result else { return }
+
+        switch jobs[index].outputMode {
+        case .createCopies:
+            if FileManager.default.fileExists(atPath: result.outputURL.path) {
+                try FileManager.default.removeItem(at: result.outputURL)
+            }
+        case .replaceOriginals:
+            guard let backupURL = result.backupURL,
+                  FileManager.default.fileExists(atPath: backupURL.path) else {
+                lastMessage = "Original backup not found."
+                return
+            }
+
+            if FileManager.default.fileExists(atPath: jobs[index].url.path) {
+                _ = try FileManager.default.replaceItemAt(
+                    jobs[index].url,
+                    withItemAt: backupURL,
+                    backupItemName: nil,
+                    options: [.usingNewMetadataOnly]
+                )
+            } else {
+                try FileManager.default.moveItem(at: backupURL, to: jobs[index].url)
+            }
+        }
+
+        jobs[index].result = nil
+        jobs[index].status = .reverted
     }
 
     private func run(jobs queuedJobs: [CompressionJob], onFinished: ((CompressionBatchSummary?) -> Void)? = nil) {

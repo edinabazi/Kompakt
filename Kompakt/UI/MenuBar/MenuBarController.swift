@@ -1,11 +1,12 @@
 import AppKit
 import Combine
+import SwiftUI
 
 @MainActor
-final class MenuBarController: NSObject, NSMenuDelegate {
+final class MenuBarController: NSObject, NSPopoverDelegate {
     private let appModel: AppModel
     private let statusItem: NSStatusItem
-    private let menu = NSMenu()
+    private let popover = NSPopover()
     private var cancellables: Set<AnyCancellable> = []
 
     init(appModel: AppModel) {
@@ -25,21 +26,24 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         image?.isTemplate = true
         image?.size = NSSize(width: 18, height: 18)
         button.image = image
-        button.contentTintColor = isProcessing ? NSColor.systemMint : nil
-    }
-
-    func menuWillOpen(_ menu: NSMenu) {
-        rebuildMenu()
+        button.contentTintColor = nil
     }
 
     private func configureStatusItem() {
-        statusItem.menu = menu
-        menu.delegate = self
-        rebuildMenu()
-
         guard let button = statusItem.button else { return }
         button.toolTip = "Kompakt"
+        button.target = self
+        button.action = #selector(togglePopover)
         updateStatusIcon(isProcessing: appModel.isProcessing)
+
+        popover.behavior = .transient
+        popover.animates = true
+        popover.delegate = self
+        popover.contentSize = NSSize(width: 320, height: 382)
+        popover.contentViewController = NSHostingController(
+            rootView: MenuBarPopoverView()
+                .environmentObject(appModel)
+        )
     }
 
     private func bindState() {
@@ -51,237 +55,16 @@ final class MenuBarController: NSObject, NSMenuDelegate {
             .store(in: &cancellables)
     }
 
-    private func rebuildMenu() {
-        menu.removeAllItems()
+    @objc private func togglePopover() {
+        guard let button = statusItem.button else { return }
 
-        menu.addItem(disabledTitle: appModel.lastMessage)
-        menu.addItem(.separator())
-
-        if let summary = appModel.pendingAskSummary {
-            menu.addItem(disabledTitle: "Kompakt \(summary.count) \(summary.noun)")
-
-            if summary.kind == .video {
-                addAction("Same Size", action: #selector(chooseSameResolution))
-                addAction("1080p", action: #selector(choose1080p))
-                addAction("720p", action: #selector(choose720p))
-            } else {
-                addAction("Lossless", action: #selector(chooseLossless))
-                addAction("Smaller", action: #selector(chooseSmaller))
-            }
-
-            addAction("Cancel", action: #selector(cancelPendingAsk))
-            menu.addItem(.separator())
+        if popover.isShown {
+            popover.performClose(nil)
+        } else {
+            NSApp.activate(ignoringOtherApps: true)
+            popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+            popover.contentViewController?.view.window?.isOpaque = false
+            popover.contentViewController?.view.window?.backgroundColor = .clear
         }
-
-        addAction("Kompakt Files...", action: #selector(openFiles))
-        addAction("Kompakt Folder...", action: #selector(openFolder))
-        menu.addItem(.separator())
-
-        menu.addItem(settingsSubmenu(
-            title: "Optimization",
-            cases: CompressionMode.allCases,
-            selected: appModel.compressionMode,
-            action: #selector(setCompressionMode(_:))
-        ))
-
-        menu.addItem(settingsSubmenu(
-            title: "Video Size",
-            cases: VideoCompressionMode.allCases,
-            selected: appModel.defaultVideoMode,
-            action: #selector(setVideoMode(_:))
-        ))
-
-        menu.addItem(settingsSubmenu(
-            title: "Output",
-            cases: OutputMode.allCases,
-            selected: appModel.outputMode,
-            action: #selector(setOutputMode(_:))
-        ))
-
-        let escapeHintItem = addAction("Show ESC Hint", action: #selector(toggleEscapeHint))
-        escapeHintItem.state = appModel.showEscapeHint ? .on : .off
-
-        let openAtLoginItem = addAction("Open at Login", action: #selector(toggleOpenAtLogin))
-        openAtLoginItem.state = appModel.opensAtLogin ? .on : .off
-        menu.addItem(.separator())
-
-        let revealItem = addAction("Show Last Output in Finder", action: #selector(showLastOutput))
-        revealItem.isEnabled = appModel.jobs.contains { $0.result != nil }
-
-        let revertItem = addAction("Revert Last Kompakt", action: #selector(revertLastCompression))
-        revertItem.isEnabled = appModel.canRevertLastCompression
-
-        let clearItem = addAction("Clear Finished Items", action: #selector(clearFinishedItems))
-        clearItem.isEnabled = !appModel.completedJobs.isEmpty
-        menu.addItem(.separator())
-
-        addAction("Check for Updates...", action: #selector(checkForUpdates))
-        addAction("About Kompakt", action: #selector(showAbout))
-        menu.addItem(.separator())
-        addAction("Quit Kompakt", action: #selector(quit))
-    }
-
-    @discardableResult
-    private func addAction(_ title: String, action: Selector) -> NSMenuItem {
-        let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
-        item.target = self
-        menu.addItem(item)
-        return item
-    }
-
-    private func settingsSubmenu<T: RawRepresentable>(
-        title menuTitle: String,
-        cases: [T],
-        selected: T,
-        action: Selector
-    ) -> NSMenuItem where T.RawValue == String {
-        let item = NSMenuItem(title: menuTitle, action: nil, keyEquivalent: "")
-        let submenu = NSMenu()
-
-        for value in cases {
-            let child = NSMenuItem(title: title(for: value), action: action, keyEquivalent: "")
-            child.target = self
-            child.representedObject = value.rawValue
-            child.state = value.rawValue == selected.rawValue ? NSControl.StateValue.on : NSControl.StateValue.off
-            submenu.addItem(child)
-        }
-
-        item.submenu = submenu
-        return item
-    }
-
-    private func title<T: RawRepresentable>(for value: T) -> String where T.RawValue == String {
-        switch value {
-        case let mode as CompressionMode:
-            mode.title
-        case let mode as VideoCompressionMode:
-            mode.title
-        case let mode as OutputMode:
-            mode.title
-        default:
-            value.rawValue
-        }
-    }
-
-    @objc private func openFiles() {
-        NSApp.activate(ignoringOtherApps: true)
-        let panel = NSOpenPanel()
-        panel.allowsMultipleSelection = true
-        panel.canChooseFiles = true
-        panel.canChooseDirectories = false
-        panel.level = .floating
-        panel.begin { [weak self] response in
-            guard response == .OK else { return }
-            Task { @MainActor in
-                self?.appModel.handleDropped(urls: panel.urls)
-            }
-        }
-    }
-
-    @objc private func openFolder() {
-        NSApp.activate(ignoringOtherApps: true)
-        let panel = NSOpenPanel()
-        panel.allowsMultipleSelection = true
-        panel.canChooseFiles = false
-        panel.canChooseDirectories = true
-        panel.level = .floating
-        panel.begin { [weak self] response in
-            guard response == .OK else { return }
-            Task { @MainActor in
-                self?.appModel.handleDropped(urls: panel.urls)
-            }
-        }
-    }
-
-    @objc private func chooseLossless() {
-        appModel.choosePendingAskMode(.lossless)
-    }
-
-    @objc private func chooseSmaller() {
-        appModel.choosePendingAskMode(.smaller)
-    }
-
-    @objc private func chooseSameResolution() {
-        appModel.choosePendingVideoMode(.sameResolution)
-    }
-
-    @objc private func choose1080p() {
-        appModel.choosePendingVideoMode(.downscale1080)
-    }
-
-    @objc private func choose720p() {
-        appModel.choosePendingVideoMode(.downscale720)
-    }
-
-    @objc private func cancelPendingAsk() {
-        appModel.cancelPendingAsk()
-    }
-
-    @objc private func setCompressionMode(_ sender: NSMenuItem) {
-        guard let rawValue = sender.representedObject as? String,
-              let mode = CompressionMode(rawValue: rawValue) else {
-            return
-        }
-
-        appModel.compressionMode = mode
-    }
-
-    @objc private func setVideoMode(_ sender: NSMenuItem) {
-        guard let rawValue = sender.representedObject as? String,
-              let mode = VideoCompressionMode(rawValue: rawValue) else {
-            return
-        }
-
-        appModel.defaultVideoMode = mode
-    }
-
-    @objc private func setOutputMode(_ sender: NSMenuItem) {
-        guard let rawValue = sender.representedObject as? String,
-              let mode = OutputMode(rawValue: rawValue) else {
-            return
-        }
-
-        appModel.outputMode = mode
-    }
-
-    @objc private func toggleEscapeHint() {
-        appModel.showEscapeHint.toggle()
-    }
-
-    @objc private func toggleOpenAtLogin() {
-        appModel.setOpensAtLogin(!appModel.opensAtLogin)
-    }
-
-    @objc private func showLastOutput() {
-        appModel.revealLatestOutput()
-    }
-
-    @objc private func revertLastCompression() {
-        appModel.revertLastCompression()
-    }
-
-    @objc private func clearFinishedItems() {
-        appModel.clearCompleted()
-    }
-
-    @objc private func showAbout() {
-        NSApp.activate(ignoringOtherApps: true)
-        NSApp.orderFrontStandardAboutPanel(nil)
-    }
-
-    @objc private func checkForUpdates() {
-        AppUpdater.shared.checkForUpdates()
-    }
-
-    @objc private func quit() {
-        NSApp.terminate(nil)
-    }
-}
-
-private extension NSMenu {
-    func addItem(disabledTitle title: String) {
-        let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
-        item.isEnabled = false
-        addItem(item)
     }
 }
