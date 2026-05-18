@@ -1,0 +1,16 @@
+<?xml version="1.0" standalone="yes"?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>Kompakt</title>
+        <item>
+            <title>1.0</title>
+            <pubDate>Mon, 18 May 2026 01:10:02 +0000</pubDate>
+            <link>https://github.com/edinabazi/Kompakt</link>
+            <sparkle:version>1</sparkle:version>
+            <sparkle:shortVersionString>1.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <sparkle:releaseNotesLink>https://edinabazi.github.io/Kompakt/Kompakt-v1.0.0.md</sparkle:releaseNotesLink>
+            <enclosure url="https://edinabazi.github.io/Kompakt-v1.0.0.zip" length="56858052" type="application/octet-stream" sparkle:edSignature="tDgD71hlZn08qsAjBeGxbuUeNl78ILSHpI56IR38vrAngbsvUjxy4i4rIV44jjahJRH7xlVaZb4IuhCCubcSBQ=="/>
+        </item>
+    </channel>
+</rss>
