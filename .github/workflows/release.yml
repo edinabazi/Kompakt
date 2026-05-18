@@ -170,6 +170,30 @@ jobs:
           ditto -c -k --keepParent "$EXPORT_PATH/$APP_NAME.app" "build/$APP_NAME.zip"
           shasum -a 256 "build/$APP_NAME.zip" > "build/$APP_NAME.zip.sha256"
 
+      - name: Create release DMG
+        run: |
+          set -euo pipefail
+
+          ./Scripts/create-dmg.sh "$EXPORT_PATH/$APP_NAME.app" "build/$APP_NAME.dmg"
+
+      - name: Notarize release DMG
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+
+          xcrun notarytool submit "build/$APP_NAME.dmg" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait
+
+          xcrun stapler staple "build/$APP_NAME.dmg"
+          xcrun stapler validate "build/$APP_NAME.dmg"
+          shasum -a 256 "build/$APP_NAME.dmg" > "build/$APP_NAME.dmg.sha256"
+
       - name: Publish Sparkle appcast
         if: startsWith(github.ref, 'refs/tags/')
         env:
@@ -213,8 +237,8 @@ jobs:
         with:
           name: Kompakt-release
           path: |
-            build/Kompakt.zip
-            build/Kompakt.zip.sha256
+            build/Kompakt.dmg
+            build/Kompakt.dmg.sha256
 
       - name: Publish GitHub release
         if: startsWith(github.ref, 'refs/tags/')
@@ -224,10 +248,10 @@ jobs:
           set -euo pipefail
 
           gh release create "${GITHUB_REF_NAME}" \
-            "build/$APP_NAME.zip" \
-            "build/$APP_NAME.zip.sha256" \
+            "build/$APP_NAME.dmg" \
+            "build/$APP_NAME.dmg.sha256" \
             --title "$APP_NAME ${GITHUB_REF_NAME}" \
-            --notes "Signed and notarized macOS release."
+            --notes "Signed and notarized macOS DMG release."
 
       - name: Delete temporary keychain
         if: always()

@@ -14,8 +14,10 @@ struct KompaktApp: App {
 
     var body: some Scene {
         Settings {
-            SettingsView()
-                .environmentObject(appModel)
+            EmptyView()
+        }
+        .commands {
+            CommandGroup(replacing: .appSettings) {}
         }
     }
 }

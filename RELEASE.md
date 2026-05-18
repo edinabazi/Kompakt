@@ -30,3 +30,5 @@ SPARKLE_PRIVATE_ED_KEY
 ```
 
 The release workflow compiles the public key into `Info.plist`, signs update archives with the private key, and pushes `appcast.xml` plus versioned update zips to the `gh-pages` branch.
+
+GitHub release downloads are published as a signed and notarized DMG with a drag-to-Applications layout. Sparkle updates continue to use the signed zip archive generated for the appcast.

@@ -23,6 +23,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             dragMonitor.start()
         }
 
+        if ProcessInfo.processInfo.environment["KOMPAKT_DISABLE_FIRST_LAUNCH_ONBOARDING"] != "1" {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+                AppModel.shared.showFirstLaunchOnboardingIfNeeded()
+            }
+        }
     }
 
     func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool {
@@ -31,6 +36,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func application(_ sender: NSApplication, openFiles filenames: [String]) {
         Task { @MainActor in
+            AppModel.shared.noteFileOpenRequest()
             AppModel.shared.handleDropped(paths: filenames)
             sender.reply(toOpenOrPrint: .success)
         }
@@ -38,6 +44,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func application(_ application: NSApplication, open urls: [URL]) {
         Task { @MainActor in
+            AppModel.shared.noteFileOpenRequest()
             AppModel.shared.handleDropped(urls: urls)
         }
     }
