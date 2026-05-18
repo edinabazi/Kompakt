@@ -22,7 +22,7 @@ jobs:
       CONFIGURATION: Release
       ARCHIVE_PATH: build/Kompakt.xcarchive
       EXPORT_PATH: build/export
-      KEYCHAIN_PATH: ${{ runner.temp }}/signing.keychain-db
+      KEYCHAIN_NAME: signing.keychain-db
       KEYCHAIN_PASSWORD: temporary-ci-keychain-password
 
     steps:
@@ -58,6 +58,9 @@ jobs:
           set -euo pipefail
 
           mkdir -p build
+          KEYCHAIN_PATH="$RUNNER_TEMP/$KEYCHAIN_NAME"
+          echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+
           printf '%s' "$MACOS_CERTIFICATE_P12" > build/certificate.p12.base64
           base64 -D -i build/certificate.p12.base64 -o build/certificate.p12
 
