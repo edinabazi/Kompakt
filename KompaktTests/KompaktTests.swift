@@ -159,3 +159,96 @@ struct KompaktTests {
         return item
     }
 }
+
+@Suite(.serialized)
+@MainActor
+struct AppModelRollbackTests {
+    @Test func createCopiesRollbackDeletesOnlyOutputCopy() throws {
+        let directory = try temporaryDirectory()
+        let original = try write([0x01], named: "original.png", in: directory)
+        let output = try write([0x02], named: "original-kompakt.png", in: directory)
+        var job = completedJob(url: original, outputURL: output, backupURL: nil, outputMode: .createCopies)
+
+        let appModel = AppModel.shared
+        appModel.replaceJobsForTesting([job])
+        job = try #require(appModel.jobs.first)
+
+        appModel.revert(job: job)
+
+        #expect(FileManager.default.fileExists(atPath: original.path))
+        #expect(!FileManager.default.fileExists(atPath: output.path))
+        #expect(appModel.jobs.first?.status == .reverted)
+        #expect(appModel.jobs.first?.result == nil)
+    }
+
+    @Test func replaceOriginalsRollbackRestoresBackup() throws {
+        let directory = try temporaryDirectory()
+        let original = try write(Array("kompakted".utf8), named: "photo.png", in: directory)
+        let backup = try write(Array("original".utf8), named: "photo.png.kompakt-backup", in: directory)
+        var job = completedJob(url: original, outputURL: original, backupURL: backup, outputMode: .replaceOriginals)
+
+        let appModel = AppModel.shared
+        appModel.replaceJobsForTesting([job])
+        job = try #require(appModel.jobs.first)
+
+        appModel.revert(job: job)
+
+        let restored = try String(contentsOf: original, encoding: .utf8)
+        #expect(restored == "original")
+        #expect(appModel.jobs.first?.status == .reverted)
+        #expect(appModel.jobs.first?.result == nil)
+    }
+
+    @Test func missingBackupRollbackLeavesJobResultIntact() throws {
+        let directory = try temporaryDirectory()
+        let original = try write(Array("kompakted".utf8), named: "photo.png", in: directory)
+        let missingBackup = directory.appendingPathComponent("missing-backup")
+        var job = completedJob(url: original, outputURL: original, backupURL: missingBackup, outputMode: .replaceOriginals)
+
+        let appModel = AppModel.shared
+        appModel.replaceJobsForTesting([job])
+        job = try #require(appModel.jobs.first)
+
+        appModel.revert(job: job)
+
+        #expect(appModel.jobs.first?.status == .finished)
+        #expect(appModel.jobs.first?.result != nil)
+        #expect(appModel.lastMessage == "Revert failed: Original backup not found.")
+    }
+
+    private func completedJob(
+        url: URL,
+        outputURL: URL,
+        backupURL: URL?,
+        outputMode: OutputMode
+    ) -> CompressionJob {
+        var job = CompressionJob(
+            batchID: UUID(),
+            url: url,
+            mode: .smaller,
+            videoMode: nil,
+            outputMode: outputMode
+        )
+        job.status = .finished
+        job.result = CompressionResult(
+            outputURL: outputURL,
+            backupURL: backupURL,
+            originalSize: 2,
+            compressedSize: 1,
+            toolName: "test"
+        )
+        return job
+    }
+
+    private func temporaryDirectory() throws -> URL {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }
+
+    private func write(_ bytes: [UInt8], named name: String, in directory: URL) throws -> URL {
+        let url = directory.appendingPathComponent(name)
+        try Data(bytes).write(to: url)
+        return url
+    }
+}

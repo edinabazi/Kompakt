@@ -15,11 +15,6 @@ enum AppCommands {
         AppUpdater.shared.checkForUpdates()
     }
 
-    static func showAbout() {
-        NSApp.activate(ignoringOtherApps: true)
-        NSApp.orderFrontStandardAboutPanel(nil)
-    }
-
     static func quit() {
         NSApp.terminate(nil)
     }

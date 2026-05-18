@@ -39,12 +39,19 @@ final class AppModel: ObservableObject {
         jobs.compactMap(\.result?.bytesSaved).reduce(0, +)
     }
 
-    var canRevertLastCompression: Bool {
-        jobs.contains { $0.result != nil }
-    }
-
     var opensAtLogin: Bool {
         SMAppService.mainApp.status == .enabled
+    }
+
+    enum RevertError: LocalizedError {
+        case backupMissing
+
+        var errorDescription: String? {
+            switch self {
+            case .backupMissing:
+                "Original backup not found."
+            }
+        }
     }
 
     func attachMenuBarController(_ controller: MenuBarController) {
@@ -155,60 +162,6 @@ final class AppModel: ObservableObject {
         NSWorkspace.shared.activateFileViewerSelecting([url])
     }
 
-    func revealLatestOutput() {
-        guard let job = jobs.first(where: { $0.result != nil }) else { return }
-        reveal(job)
-    }
-
-    func revertLastCompression() {
-        guard let batchID = jobs.first(where: { $0.result != nil })?.batchID else {
-            lastMessage = "Nothing to revert."
-            return
-        }
-
-        let indexes = jobs.indices.filter { jobs[$0].batchID == batchID && jobs[$0].result != nil }
-        var revertedCount = 0
-
-        do {
-            for index in indexes {
-                guard let result = jobs[index].result else { continue }
-
-                switch jobs[index].outputMode {
-                case .createCopies:
-                    if FileManager.default.fileExists(atPath: result.outputURL.path) {
-                        try FileManager.default.removeItem(at: result.outputURL)
-                    }
-                case .replaceOriginals:
-                    guard let backupURL = result.backupURL,
-                          FileManager.default.fileExists(atPath: backupURL.path) else {
-                        lastMessage = "Original backup not found."
-                        return
-                    }
-
-                    if FileManager.default.fileExists(atPath: jobs[index].url.path) {
-                        _ = try FileManager.default.replaceItemAt(
-                            jobs[index].url,
-                            withItemAt: backupURL,
-                            backupItemName: nil,
-                            options: [.usingNewMetadataOnly]
-                        )
-                    } else {
-                        try FileManager.default.moveItem(at: backupURL, to: jobs[index].url)
-                    }
-                }
-
-                jobs[index].result = nil
-                jobs[index].status = .reverted
-                revertedCount += 1
-            }
-
-            lastMessage = "Reverted \(revertedCount) file\(revertedCount == 1 ? "" : "s")."
-            updateProgress()
-        } catch {
-            lastMessage = "Revert failed: \(error.localizedDescription)"
-        }
-    }
-
     func revert(job: CompressionJob) {
         guard let index = jobs.firstIndex(where: { $0.id == job.id }),
               jobs[index].result != nil else {
@@ -262,8 +215,7 @@ final class AppModel: ObservableObject {
         case .replaceOriginals:
             guard let backupURL = result.backupURL,
                   FileManager.default.fileExists(atPath: backupURL.path) else {
-                lastMessage = "Original backup not found."
-                return
+                throw RevertError.backupMissing
             }
 
             if FileManager.default.fileExists(atPath: jobs[index].url.path) {
@@ -328,3 +280,12 @@ final class AppModel: ObservableObject {
         return finished == 0 ? "Ready." : "\(finished) file\(finished == 1 ? "" : "s") kompakted · \(saved) saved."
     }
 }
+
+#if DEBUG
+extension AppModel {
+    func replaceJobsForTesting(_ jobs: [CompressionJob]) {
+        self.jobs = jobs
+        updateProgress()
+    }
+}
+#endif

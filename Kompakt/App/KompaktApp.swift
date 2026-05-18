@@ -16,5 +16,8 @@ struct KompaktApp: App {
         Settings {
             EmptyView()
         }
+        .commands {
+            CommandGroup(replacing: .appSettings) {}
+        }
     }
 }
