@@ -43,14 +43,14 @@ copy_arch_tools() {
   src="$1"
   dest="$2"
 
-  cp "$src/mozjpeg/4.1.5/bin/cjpeg" "$dest/cjpeg"
-  cp "$src/mozjpeg/4.1.5/bin/jpegtran" "$dest/jpegtran"
-  cp "$src/jpegoptim/1.5.6/bin/jpegoptim" "$dest/jpegoptim"
-  cp "$src/gifsicle/1.96/bin/gifsicle" "$dest/gifsicle"
-  cp "$src/optipng/7.9.1/bin/optipng" "$dest/optipng"
-  cp "$src/mozjpeg/4.1.5/lib/libjpeg.62.dylib" "$dest/libjpeg.62.dylib"
-  cp "$src/jpeg-turbo/3.1.4.1/lib/libjpeg.8.dylib" "$dest/libjpeg.8.dylib"
-  cp "$src/libpng/1.6.58/lib/libpng16.16.dylib" "$dest/libpng16.16.dylib"
+  cp "$(find "$src/mozjpeg" -path "*/bin/cjpeg" -type f | head -n 1)" "$dest/cjpeg"
+  cp "$(find "$src/mozjpeg" -path "*/bin/jpegtran" -type f | head -n 1)" "$dest/jpegtran"
+  cp "$(find "$src/jpegoptim" -path "*/bin/jpegoptim" -type f | head -n 1)" "$dest/jpegoptim"
+  cp "$(find "$src/gifsicle" -path "*/bin/gifsicle" -type f | head -n 1)" "$dest/gifsicle"
+  cp "$(find "$src/optipng" -path "*/bin/optipng" -type f | head -n 1)" "$dest/optipng"
+  cp "$(find "$src/mozjpeg" -path "*/lib/libjpeg.62.dylib" -type f | head -n 1)" "$dest/libjpeg.62.dylib"
+  cp "$(find "$src/jpeg-turbo" -path "*/lib/libjpeg.8.dylib" -type f | head -n 1)" "$dest/libjpeg.8.dylib"
+  cp "$(find "$src/libpng" -path "*/lib/libpng16.16.dylib" -type f | head -n 1)" "$dest/libpng16.16.dylib"
   chmod 755 "$dest"/*
 }
 
