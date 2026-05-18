@@ -32,8 +32,12 @@ jobs:
       - name: Show Xcode version
         run: xcodebuild -version
 
-      - name: Fetch ffmpeg helper
-        run: ./Scripts/fetch-ffmpeg-tools.sh
+      - name: Fetch optimizer helpers
+        run: |
+          ./Scripts/fetch-oxipng.sh
+          ./Scripts/fetch-webp-tools.sh
+          ./Scripts/fetch-optimizer-tools.sh
+          ./Scripts/fetch-ffmpeg-tools.sh
 
       - name: Verify bundled optimizer tools
         run: ./Scripts/verify-bundled-tools.sh
