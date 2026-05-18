@@ -3,6 +3,19 @@
     <channel>
         <title>Kompakt</title>
         <item>
+            <title>1.0.1</title>
+            <pubDate>Mon, 18 May 2026 15:47:07 +0000</pubDate>
+            <link>https://github.com/edinabazi/Kompakt</link>
+            <sparkle:version>2</sparkle:version>
+            <sparkle:shortVersionString>1.0.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <sparkle:releaseNotesLink>https://edinabazi.github.io/Kompakt/Kompakt-v1.0.1.md</sparkle:releaseNotesLink>
+            <enclosure url="https://edinabazi.github.io/Kompakt-v1.0.1.zip" length="56963522" type="application/octet-stream" sparkle:edSignature="HQNgm6JaO6nqihQ4Qh39bq78Bd6tEcqBmgVgwP+aSn/S8BQ4gjrzQouNok+zXzsCRpV7e5JiZHMTkjjtyg2eCQ=="/>
+            <sparkle:deltas>
+                <enclosure url="https://edinabazi.github.io/Kompakt2-1.delta" sparkle:deltaFrom="1" length="257322" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977840" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="adbtgFAzysUYb5WlzgUe/0KMbYkE2cKZIj45mz8GFTzXUqwlj6izRSgyw+P5qcCArU6sHvfpceUGcaytE+iBAQ=="/>
+            </sparkle:deltas>
+        </item>
+        <item>
             <title>1.0</title>
             <pubDate>Mon, 18 May 2026 01:10:02 +0000</pubDate>
             <link>https://github.com/edinabazi/Kompakt</link>
