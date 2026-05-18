@@ -149,11 +149,11 @@ struct ExternalDropZoneView: View {
                         .stroke(.white.opacity(0.16), lineWidth: 1)
                 }
 
-            Text("to close")
+            Text("to hide")
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(.white.opacity(0.48))
         }
-        .accessibilityLabel("Escape to close")
+        .accessibilityLabel("Escape to hide")
     }
 
     private var completionBadge: some View {
