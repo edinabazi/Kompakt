@@ -186,6 +186,7 @@ jobs:
             git worktree add build/pages origin/gh-pages
           else
             mkdir -p build/pages
+            git worktree add --detach build/pages
           fi
 
           versioned_zip="$APP_NAME-${GITHUB_REF_NAME}.zip"
@@ -202,9 +203,6 @@ jobs:
             build/pages
 
           cd build/pages
-          if [ ! -d .git ] && [ ! -f .git ]; then
-            git init
-          fi
           git checkout -B gh-pages
           git add .
           git commit -m "Update Sparkle appcast for ${GITHUB_REF_NAME}"
