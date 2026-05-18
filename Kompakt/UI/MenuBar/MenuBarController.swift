@@ -97,6 +97,12 @@ final class MenuBarController: NSObject, NSMenuDelegate {
             selected: appModel.outputMode,
             action: #selector(setOutputMode(_:))
         ))
+
+        let escapeHintItem = addAction("Show ESC Hint", action: #selector(toggleEscapeHint))
+        escapeHintItem.state = appModel.showEscapeHint ? .on : .off
+
+        let openAtLoginItem = addAction("Open at Login", action: #selector(toggleOpenAtLogin))
+        openAtLoginItem.state = appModel.opensAtLogin ? .on : .off
         menu.addItem(.separator())
 
         let revealItem = addAction("Show Last Output in Finder", action: #selector(showLastOutput))
@@ -236,6 +242,14 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         }
 
         appModel.outputMode = mode
+    }
+
+    @objc private func toggleEscapeHint() {
+        appModel.showEscapeHint.toggle()
+    }
+
+    @objc private func toggleOpenAtLogin() {
+        appModel.setOpensAtLogin(!appModel.opensAtLogin)
     }
 
     @objc private func showLastOutput() {

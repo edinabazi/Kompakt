@@ -86,8 +86,10 @@ struct ExternalDropZoneView: View {
                 }
                 .padding(.top, 4)
 
-                escapeHint
-                    .padding(.top, 2)
+                if appModel.showEscapeHint {
+                    escapeHint
+                        .padding(.top, 2)
+                }
             }
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
@@ -100,7 +102,9 @@ struct ExternalDropZoneView: View {
 
                 completionBadge
 
-                escapeHint
+                if appModel.showEscapeHint {
+                    escapeHint
+                }
             }
             .compositingGroup()
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
@@ -116,7 +120,9 @@ struct ExternalDropZoneView: View {
                     .blur(radius: phase.textBlur)
                     .modifier(HoverTextMagnet(isActive: isTargeted && phase.acceptsDrops, dragLocation: dragLocation))
 
-                escapeHint
+                if appModel.showEscapeHint {
+                    escapeHint
+                }
             }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                 .transition(.opacity.combined(with: .scale(scale: 0.98)))
@@ -573,6 +579,7 @@ private final class DropReceiverNSView: NSView {
     var onTargetChanged: ((Bool) -> Void)?
     var onDragLocationChanged: ((CGPoint?) -> Void)?
     var onDrop: (([URL]) -> Void)?
+    private var isTargeted = false
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -588,20 +595,20 @@ private final class DropReceiverNSView: NSView {
 
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
         let acceptsDrop = acceptsFileURLs(from: sender)
-        onTargetChanged?(acceptsDrop)
+        updateTargetState(acceptsDrop)
         onDragLocationChanged?(acceptsDrop ? dragLocation(from: sender) : nil)
         return acceptsDrop ? .copy : []
     }
 
     override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
         let acceptsDrop = acceptsFileURLs(from: sender)
-        onTargetChanged?(acceptsDrop)
+        updateTargetState(acceptsDrop)
         onDragLocationChanged?(acceptsDrop ? dragLocation(from: sender) : nil)
         return acceptsDrop ? .copy : []
     }
 
     override func draggingExited(_ sender: NSDraggingInfo?) {
-        onTargetChanged?(false)
+        updateTargetState(false)
         onDragLocationChanged?(nil)
     }
 
@@ -611,7 +618,7 @@ private final class DropReceiverNSView: NSView {
 
     override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
         let urls = supportedURLs(from: sender)
-        onTargetChanged?(false)
+        updateTargetState(false)
         onDragLocationChanged?(nil)
 
         guard !urls.isEmpty else { return false }
@@ -620,8 +627,18 @@ private final class DropReceiverNSView: NSView {
     }
 
     override func concludeDragOperation(_ sender: NSDraggingInfo?) {
-        onTargetChanged?(false)
+        updateTargetState(false)
         onDragLocationChanged?(nil)
+    }
+
+    private func updateTargetState(_ isTargeted: Bool) {
+        guard self.isTargeted != isTargeted else { return }
+        self.isTargeted = isTargeted
+        onTargetChanged?(isTargeted)
+
+        if isTargeted {
+            NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
+        }
     }
 
     private func supportedURLs(from sender: NSDraggingInfo) -> [URL] {

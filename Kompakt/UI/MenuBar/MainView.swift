@@ -280,10 +280,21 @@ struct SettingsView: View {
                     Text(mode.title).tag(mode)
                 }
             }
+
+            Toggle("Show ESC hint", isOn: $appModel.showEscapeHint)
+            Toggle("Open at Login", isOn: openAtLoginBinding)
         }
         .formStyle(.grouped)
         .padding(24)
         .frame(width: 390)
+    }
+
+    private var openAtLoginBinding: Binding<Bool> {
+        Binding {
+            appModel.opensAtLogin
+        } set: {
+            appModel.setOpensAtLogin($0)
+        }
     }
 }
 

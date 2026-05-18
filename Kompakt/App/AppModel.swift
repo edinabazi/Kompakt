@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import ServiceManagement
 import SwiftUI
 
 @MainActor
@@ -9,6 +10,7 @@ final class AppModel: ObservableObject {
     @AppStorage("compressionMode") var compressionMode: CompressionMode = .ask
     @AppStorage("outputMode") var outputMode: OutputMode = .replaceOriginals
     @AppStorage("defaultVideoMode") var defaultVideoMode: VideoCompressionMode = .sameResolution
+    @AppStorage("showEscapeHint") var showEscapeHint = true
 
     @Published private(set) var jobs: [CompressionJob] = []
     @Published private(set) var isProcessing = false
@@ -35,6 +37,10 @@ final class AppModel: ObservableObject {
 
     var canRevertLastCompression: Bool {
         jobs.contains { $0.result != nil }
+    }
+
+    var opensAtLogin: Bool {
+        SMAppService.mainApp.status == .enabled
     }
 
     func attachMenuBarController(_ controller: MenuBarController) {
@@ -205,6 +211,24 @@ final class AppModel: ObservableObject {
 
     func dismissExternalDropZone() {
         externalDropZoneController?.endDrag(didDrop: false)
+    }
+
+    func setOpensAtLogin(_ isEnabled: Bool) {
+        do {
+            if isEnabled {
+                if SMAppService.mainApp.status != .enabled {
+                    try SMAppService.mainApp.register()
+                }
+            } else {
+                if SMAppService.mainApp.status == .enabled {
+                    try SMAppService.mainApp.unregister()
+                }
+            }
+
+            objectWillChange.send()
+        } catch {
+            lastMessage = "Open at Login failed: \(error.localizedDescription)"
+        }
     }
 
     private func run(jobs queuedJobs: [CompressionJob], onFinished: ((CompressionBatchSummary?) -> Void)? = nil) {
