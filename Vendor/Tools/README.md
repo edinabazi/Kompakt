@@ -34,6 +34,6 @@ Bundled helper names:
 
 `fetch-oxipng.sh` refreshes the Rust-distributed `oxipng` release. `fetch-webp-tools.sh` refreshes Google's statically linked `cwebp` release from the official WebP archives. `fetch-ffmpeg-tools.sh` refreshes the static macOS `ffmpeg` helper. `fetch-optimizer-tools.sh` vendors the remaining image helpers from Homebrew bottles into this repo for direct distribution builds. Homebrew is only a maintainer-side fetch mechanism; the built app does not call or require it.
 
-Video optimisation requires a bundled `ffmpeg` binary in `macos-universal`. The app intentionally does not use system installs or native fallbacks for supported formats.
+Video optimisation requires `ffmpeg` in `macos-universal`. Do not commit the `ffmpeg` binaries; they exceed GitHub's normal blob limits. Run `Scripts/fetch-ffmpeg-tools.sh` locally or in CI before verifying, building, or archiving a release. The app intentionally does not use system installs or native fallbacks for supported formats.
 
 Run `Scripts/verify-bundled-tools.sh` before shipping a release.
