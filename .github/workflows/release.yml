@@ -222,7 +222,7 @@ jobs:
 
           echo "$SPARKLE_PRIVATE_ED_KEY" | "$generate_appcast" \
             --ed-key-file - \
-            --download-url-prefix "https://edinabazi.github.io/Kompakt" \
+            --download-url-prefix "https://edinabazi.github.io/Kompakt/" \
             --link "https://github.com/edinabazi/Kompakt" \
             build/pages
 
