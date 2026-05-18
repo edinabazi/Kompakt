@@ -10,6 +10,7 @@ final class AppModel: ObservableObject {
     @AppStorage("compressionMode") var compressionMode: CompressionMode = .smaller
     @AppStorage("outputMode") var outputMode: OutputMode = .replaceOriginals
     @AppStorage("defaultVideoMode") var defaultVideoMode: VideoCompressionMode = .sameResolution
+    @AppStorage("successSoundEnabled") var successSoundEnabled = true
     @AppStorage("showEscapeHint") var showEscapeHint = true
     @AppStorage("hasSeenFirstLaunchOnboarding") private var hasSeenFirstLaunchOnboarding = false
 
@@ -22,6 +23,7 @@ final class AppModel: ObservableObject {
     @Published private(set) var externalDragSummary = OptimizableFileSummary.fallback
 
     private let queue = CompressionQueue()
+    private let successSoundPlayer = SuccessSoundPlayer()
     private weak var menuBarController: MenuBarController?
     private weak var externalDropZoneController: ExternalDropZoneController?
     private var pendingAskURLs: [URL] = []
@@ -288,7 +290,11 @@ final class AppModel: ObservableObject {
                     self.lastMessage = self.summaryMessage()
                 }
                 let batchJobs = self.jobs.filter { queuedJobIDs.contains($0.id) }
-                onFinished?(CompressionBatchSummary.from(batchJobs))
+                let summary = CompressionBatchSummary.from(batchJobs)
+                if self.successSoundEnabled, summary?.optimizedCount ?? 0 > 0 {
+                    self.successSoundPlayer.play()
+                }
+                onFinished?(summary)
             }
         }
     }

@@ -484,6 +484,14 @@ struct MenuBarPopoverView: View {
                     PopoverDivider()
 
                     PopoverToggleRow(
+                        title: "Success sound",
+                        subtitle: "Play a sound after successful optimization.",
+                        isOn: successSoundBinding
+                    )
+
+                    PopoverDivider()
+
+                    PopoverToggleRow(
                         title: "Show ESC hint",
                         subtitle: "Show the hide shortcut while dragging.",
                         isOn: escapeHintBinding
@@ -561,6 +569,17 @@ struct MenuBarPopoverView: View {
             guard appModel.showEscapeHint != isEnabled else { return }
             DispatchQueue.main.async {
                 appModel.showEscapeHint = isEnabled
+            }
+        }
+    }
+
+    private var successSoundBinding: Binding<Bool> {
+        Binding {
+            appModel.successSoundEnabled
+        } set: { isEnabled in
+            guard appModel.successSoundEnabled != isEnabled else { return }
+            DispatchQueue.main.async {
+                appModel.successSoundEnabled = isEnabled
             }
         }
     }

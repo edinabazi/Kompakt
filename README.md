@@ -1,39 +1,41 @@
 # Kompakt
 
-Kompakt is a small macOS menu bar app for compressing images and videos by dropping files or folders onto the app.
+A small macOS menu bar app for making images and videos smaller.
 
-The app is designed to be self-contained. End users should only install Kompakt; runtime optimizer tools are bundled into `Kompakt.app/Contents/Helpers` during the Xcode build.
+Kompakt stays out of the way until you need it. Start dragging a supported file and a dropzone appears on the right side of your screen. Drop the file in, Kompakt optimizes it, shows how much space was saved, then disappears.
 
-## Requirements
+## How it works
 
-- macOS 14 or newer
-- Xcode 17 or newer
+Drag an image or video.
 
-## Build
+Drop it into Kompakt.
 
-Open `Kompakt.xcodeproj` in Xcode and run the shared `Kompakt` scheme.
+Get a smaller file.
 
-From the command line:
+That’s the whole flow. No upload page, no file picker, no export screen, no extra window to manage.
 
-```sh
-xcodebuild test -scheme Kompakt -project Kompakt.xcodeproj -destination 'platform=macOS'
-```
+## Settings
 
-The build intentionally fails if a required bundled optimizer is missing. While preparing a missing helper locally, maintainers can compile the Swift app with:
+Kompakt keeps the controls simple.
 
-```sh
-xcodebuild test -scheme Kompakt -project Kompakt.xcodeproj -destination 'platform=macOS'
-```
+You can choose between **Lossless** and **Smaller** (lossy) optimization, decide whether videos should keep their original size or be resized to **1080p** or **720p**, and choose whether optimized files should replace the original or be saved as copies.
 
-## Bundled Optimizers
+## Menu bar
 
-Runtime helpers live in `Vendor/Tools/macos-universal` and are copied into the app bundle by `Scripts/bundle-optimizer-tools.sh`.
-The shared Xcode project does not commit an Apple Developer Team ID. Set a local team in Xcode or pass signing settings on the command line when producing signed release builds.
+The menu bar panel shows your recent kompaktions and gives you quick access to settings, updates, and quitting the app.
 
-Kompakt does not call Homebrew, MacPorts, or system-installed optimizer tools at runtime. Maintainer fetch scripts may use local tools to refresh vendored binaries, but the app itself must remain self-contained.
+## Status
 
-See `Vendor/Tools/README.md` and `THIRD_PARTY_NOTICES.md` before updating binaries.
+Kompakt is early and intentionally simple.
 
-## Contributing
+Right now it focuses on quick image and video optimization through a lightweight macOS menu bar workflow.
 
-Keep changes small, explicit, and easy to review. See `CONTRIBUTING.md`.
+## Roadmap
+
+- Convert files
+- Watched folders
+- Clipboard optimization
+- Finder actions
+- Custom presets
+- Compression history
+- Shortcuts support
