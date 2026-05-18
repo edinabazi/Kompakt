@@ -59,7 +59,12 @@ for tool in $required_tools; do
   chmod 755 "$dest"
 
   if [ -n "${EXPANDED_CODE_SIGN_IDENTITY:-}" ]; then
-    codesign --force --sign "${EXPANDED_CODE_SIGN_IDENTITY}" --options runtime --timestamp=none "$dest"
+    timestamp_args="--timestamp=none"
+    if [ "${CONFIGURATION:-}" = "Release" ]; then
+      timestamp_args="--timestamp"
+    fi
+
+    codesign --force --sign "${EXPANDED_CODE_SIGN_IDENTITY}" --options runtime $timestamp_args "$dest"
   fi
 
   echo "Bundled $tool into $dest"

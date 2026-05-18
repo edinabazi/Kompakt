@@ -1,0 +1,168 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build, notarize, and publish
+    runs-on: macos-26
+    timeout-minutes: 45
+
+    env:
+      APP_NAME: Kompakt
+      PROJECT_PATH: Kompakt.xcodeproj
+      SCHEME: Kompakt
+      CONFIGURATION: Release
+      ARCHIVE_PATH: build/Kompakt.xcarchive
+      EXPORT_PATH: build/export
+      KEYCHAIN_PATH: ${{ runner.temp }}/signing.keychain-db
+      KEYCHAIN_PASSWORD: temporary-ci-keychain-password
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Verify bundled optimizer tools
+        run: ./Scripts/verify-bundled-tools.sh
+
+      - name: Run tests
+        run: |
+          xcodebuild test \
+            -scheme "$SCHEME" \
+            -project "$PROJECT_PATH" \
+            -destination 'platform=macOS' \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Import Developer ID certificate
+        env:
+          MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          mkdir -p build
+          printf '%s' "$MACOS_CERTIFICATE_P12" > build/certificate.p12.base64
+          base64 -D -i build/certificate.p12.base64 -o build/certificate.p12
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import build/certificate.p12 \
+            -k "$KEYCHAIN_PATH" \
+            -P "$MACOS_CERTIFICATE_PASSWORD" \
+            -T /usr/bin/codesign \
+            -T /usr/bin/security \
+            -T /usr/bin/productbuild
+          security list-keychains -d user -s "$KEYCHAIN_PATH" "$HOME/Library/Keychains/login.keychain-db"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
+
+      - name: Archive app
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+
+          xcodebuild archive \
+            -scheme "$SCHEME" \
+            -project "$PROJECT_PATH" \
+            -configuration "$CONFIGURATION" \
+            -destination 'generic/platform=macOS' \
+            -archivePath "$ARCHIVE_PATH" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            CODE_SIGN_IDENTITY="Developer ID Application"
+
+      - name: Prepare export options
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+
+          sed "s/\$(APPLE_TEAM_ID)/$APPLE_TEAM_ID/g" \
+            Config/DeveloperIDExportOptions.plist > build/ExportOptions.plist
+
+      - name: Export signed app
+        run: |
+          set -euo pipefail
+
+          xcodebuild -exportArchive \
+            -archivePath "$ARCHIVE_PATH" \
+            -exportOptionsPlist build/ExportOptions.plist \
+            -exportPath "$EXPORT_PATH"
+
+      - name: Verify code signature
+        run: |
+          set -euo pipefail
+
+          codesign --verify --deep --strict --verbose=2 "$EXPORT_PATH/$APP_NAME.app"
+          spctl --assess --type execute --verbose=2 "$EXPORT_PATH/$APP_NAME.app" || true
+
+      - name: Create notarization zip
+        run: |
+          set -euo pipefail
+
+          ditto -c -k --keepParent "$EXPORT_PATH/$APP_NAME.app" "build/$APP_NAME-notarization.zip"
+
+      - name: Notarize app
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+
+          xcrun notarytool submit "build/$APP_NAME-notarization.zip" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait
+
+      - name: Staple notarization ticket
+        run: |
+          set -euo pipefail
+
+          xcrun stapler staple "$EXPORT_PATH/$APP_NAME.app"
+          xcrun stapler validate "$EXPORT_PATH/$APP_NAME.app"
+
+      - name: Create release zip
+        run: |
+          set -euo pipefail
+
+          ditto -c -k --keepParent "$EXPORT_PATH/$APP_NAME.app" "build/$APP_NAME.zip"
+          shasum -a 256 "build/$APP_NAME.zip" > "build/$APP_NAME.zip.sha256"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kompakt-release
+          path: |
+            build/Kompakt.zip
+            build/Kompakt.zip.sha256
+
+      - name: Publish GitHub release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          gh release create "${GITHUB_REF_NAME}" \
+            "build/$APP_NAME.zip" \
+            "build/$APP_NAME.zip.sha256" \
+            --title "$APP_NAME ${GITHUB_REF_NAME}" \
+            --notes "Signed and notarized macOS release."
+
+      - name: Delete temporary keychain
+        if: always()
+        run: |
+          security delete-keychain "$KEYCHAIN_PATH" || true
