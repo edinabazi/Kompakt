@@ -43,15 +43,30 @@ copy_arch_tools() {
   src="$1"
   dest="$2"
 
-  cp "$(find "$src/mozjpeg" -path "*/bin/cjpeg" -type f | head -n 1)" "$dest/cjpeg"
-  cp "$(find "$src/mozjpeg" -path "*/bin/jpegtran" -type f | head -n 1)" "$dest/jpegtran"
-  cp "$(find "$src/jpegoptim" -path "*/bin/jpegoptim" -type f | head -n 1)" "$dest/jpegoptim"
-  cp "$(find "$src/gifsicle" -path "*/bin/gifsicle" -type f | head -n 1)" "$dest/gifsicle"
-  cp "$(find "$src/optipng" -path "*/bin/optipng" -type f | head -n 1)" "$dest/optipng"
-  cp "$(find "$src/mozjpeg" -path "*/lib/libjpeg.62.dylib" -type f | head -n 1)" "$dest/libjpeg.62.dylib"
-  cp "$(find "$src/jpeg-turbo" -path "*/lib/libjpeg.8.dylib" -type f | head -n 1)" "$dest/libjpeg.8.dylib"
-  cp "$(find "$src/libpng" -path "*/lib/libpng16.16.dylib" -type f | head -n 1)" "$dest/libpng16.16.dylib"
+  copy_first "$src/mozjpeg" "*/bin/cjpeg" "$dest/cjpeg"
+  copy_first "$src/mozjpeg" "*/bin/jpegtran" "$dest/jpegtran"
+  copy_first "$src/jpegoptim" "*/bin/jpegoptim" "$dest/jpegoptim"
+  copy_first "$src/gifsicle" "*/bin/gifsicle" "$dest/gifsicle"
+  copy_first "$src/optipng" "*/bin/optipng" "$dest/optipng"
+  copy_first "$src/mozjpeg" "*/lib/libjpeg.62.dylib" "$dest/libjpeg.62.dylib"
+  copy_first "$src/jpeg-turbo" "*/lib/libjpeg.8.dylib" "$dest/libjpeg.8.dylib"
+  copy_first "$src/libpng" "*/lib/libpng16.16.dylib" "$dest/libpng16.16.dylib"
   chmod 755 "$dest"/*
+}
+
+copy_first() {
+  search_root="$1"
+  pattern="$2"
+  output="$3"
+  found="$(find "$search_root" -path "$pattern" | head -n 1)"
+
+  if [ -z "$found" ]; then
+    echo "Missing expected bottle file matching $pattern in $search_root" >&2
+    exit 1
+  fi
+
+  rm -rf "$output"
+  cp "$found" "$output"
 }
 
 make_universal() {

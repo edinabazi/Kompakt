@@ -5,6 +5,8 @@ VERSION="10.1.1"
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 TOOLS_DIR="$ROOT_DIR/Vendor/Tools"
 
+mkdir -p "$TOOLS_DIR/macos-arm64" "$TOOLS_DIR/macos-x86_64" "$TOOLS_DIR/macos-universal"
+
 fetch_arch() {
   arch="$1"
   asset_arch="$2"
