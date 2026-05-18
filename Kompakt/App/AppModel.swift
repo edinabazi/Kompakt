@@ -8,6 +8,7 @@ final class AppModel: ObservableObject {
 
     @AppStorage("compressionMode") var compressionMode: CompressionMode = .ask
     @AppStorage("outputMode") var outputMode: OutputMode = .replaceOriginals
+    @AppStorage("defaultVideoMode") var defaultVideoMode: VideoCompressionMode = .sameResolution
 
     @Published private(set) var jobs: [CompressionJob] = []
     @Published private(set) var isProcessing = false
@@ -32,6 +33,10 @@ final class AppModel: ObservableObject {
         jobs.compactMap(\.result?.bytesSaved).reduce(0, +)
     }
 
+    var canRevertLastCompression: Bool {
+        jobs.contains { $0.result != nil }
+    }
+
     func attachMenuBarController(_ controller: MenuBarController) {
         menuBarController = controller
     }
@@ -41,7 +46,7 @@ final class AppModel: ObservableObject {
     }
 
     func beginExternalDrag(urls: [URL]) {
-        externalDragSummary = OptimizableFileSummary.from(urls)
+        externalDragSummary = urls.isEmpty ? .fallback : OptimizableFileSummary.fromFileHints(urls)
         externalDragActive = true
     }
 
@@ -64,8 +69,6 @@ final class AppModel: ObservableObject {
             lastMessage = "No supported files found."
             return
         }
-
-        menuBarController?.showPopover()
 
         switch compressionMode {
         case .ask:
@@ -122,8 +125,11 @@ final class AppModel: ObservableObject {
         onFinished: ((CompressionBatchSummary?) -> Void)? = nil
     ) {
         let runnableMode: CompressionMode = mode == .ask ? .lossless : mode
-        let effectiveVideoMode = videoMode ?? (runnableMode == .smaller ? .sameResolution : nil)
-        let newJobs = urls.map { CompressionJob(url: $0, mode: runnableMode, videoMode: effectiveVideoMode, outputMode: outputMode) }
+        let effectiveVideoMode = videoMode ?? (runnableMode == .smaller ? defaultVideoMode : nil)
+        let batchID = UUID()
+        let newJobs = urls.map {
+            CompressionJob(batchID: batchID, url: $0, mode: runnableMode, videoMode: effectiveVideoMode, outputMode: outputMode)
+        }
         jobs.insert(contentsOf: newJobs, at: 0)
         lastMessage = "Queued \(newJobs.count) file\(newJobs.count == 1 ? "" : "s")."
         run(jobs: newJobs, onFinished: onFinished)
@@ -137,6 +143,64 @@ final class AppModel: ObservableObject {
     func reveal(_ job: CompressionJob) {
         let url = job.result?.outputURL ?? job.url
         NSWorkspace.shared.activateFileViewerSelecting([url])
+    }
+
+    func revealLatestOutput() {
+        guard let job = jobs.first(where: { $0.result != nil }) else { return }
+        reveal(job)
+    }
+
+    func revertLastCompression() {
+        guard let batchID = jobs.first(where: { $0.result != nil })?.batchID else {
+            lastMessage = "Nothing to revert."
+            return
+        }
+
+        let indexes = jobs.indices.filter { jobs[$0].batchID == batchID && jobs[$0].result != nil }
+        var revertedCount = 0
+
+        do {
+            for index in indexes {
+                guard let result = jobs[index].result else { continue }
+
+                switch jobs[index].outputMode {
+                case .createCopies:
+                    if FileManager.default.fileExists(atPath: result.outputURL.path) {
+                        try FileManager.default.removeItem(at: result.outputURL)
+                    }
+                case .replaceOriginals:
+                    guard let backupURL = result.backupURL,
+                          FileManager.default.fileExists(atPath: backupURL.path) else {
+                        lastMessage = "Original backup not found."
+                        return
+                    }
+
+                    if FileManager.default.fileExists(atPath: jobs[index].url.path) {
+                        _ = try FileManager.default.replaceItemAt(
+                            jobs[index].url,
+                            withItemAt: backupURL,
+                            backupItemName: nil,
+                            options: [.usingNewMetadataOnly]
+                        )
+                    } else {
+                        try FileManager.default.moveItem(at: backupURL, to: jobs[index].url)
+                    }
+                }
+
+                jobs[index].result = nil
+                jobs[index].status = .reverted
+                revertedCount += 1
+            }
+
+            lastMessage = "Reverted \(revertedCount) file\(revertedCount == 1 ? "" : "s")."
+            updateProgress()
+        } catch {
+            lastMessage = "Revert failed: \(error.localizedDescription)"
+        }
+    }
+
+    func showExternalDropZone() {
+        externalDropZoneController?.show()
     }
 
     func dismissExternalDropZone() {
@@ -186,6 +250,6 @@ final class AppModel: ObservableObject {
     private func summaryMessage() -> String {
         let finished = completedJobs.count
         let saved = ByteCountFormatter.string(fromByteCount: totalBytesSaved, countStyle: .file)
-        return finished == 0 ? "Ready." : "Finished \(finished) file\(finished == 1 ? "" : "s") · saved \(saved)."
+        return finished == 0 ? "Ready." : "Compressed \(finished) file\(finished == 1 ? "" : "s") · saved \(saved)."
     }
 }

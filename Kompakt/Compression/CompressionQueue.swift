@@ -58,9 +58,10 @@ actor CompressionQueue {
             return job
         }
 
-        let outputURL = try save(candidate: candidate.url, original: job.url, format: format, outputMode: job.outputMode)
+        let savedFile = try save(candidate: candidate.url, original: job.url, format: format, outputMode: job.outputMode)
         job.result = CompressionResult(
-            outputURL: outputURL,
+            outputURL: savedFile.outputURL,
+            backupURL: savedFile.backupURL,
             originalSize: originalSize,
             compressedSize: compressedSize,
             toolName: candidate.toolName
@@ -105,22 +106,50 @@ actor CompressionQueue {
         return CGImageDestinationFinalize(destination) ? output : nil
     }
 
-    private func save(candidate: URL, original: URL, format: FileFormat, outputMode: OutputMode) throws -> URL {
+    private func save(candidate: URL, original: URL, format: FileFormat, outputMode: OutputMode) throws -> SavedFile {
         switch outputMode {
         case .createCopies:
             let destination = availableCopyURL(for: original, format: format)
             try FileManager.default.copyItem(at: candidate, to: destination)
-            return destination
+            return SavedFile(outputURL: destination, backupURL: nil)
         case .replaceOriginals:
-            let backupName = original.deletingPathExtension().lastPathComponent + ".kompakt-original." + original.pathExtension
-            let replacedURL = try FileManager.default.replaceItemAt(
-                original,
-                withItemAt: candidate,
-                backupItemName: backupName,
-                options: [.usingNewMetadataOnly]
-            )
-            return replacedURL ?? original
+            let backupURL = availableBackupURL(for: original)
+            try FileManager.default.copyItem(at: original, to: backupURL)
+
+            do {
+                _ = try FileManager.default.replaceItemAt(
+                    original,
+                    withItemAt: candidate,
+                    backupItemName: nil,
+                    options: [.usingNewMetadataOnly]
+                )
+            } catch {
+                try? FileManager.default.removeItem(at: backupURL)
+                throw error
+            }
+
+            return SavedFile(outputURL: original, backupURL: backupURL)
         }
+    }
+
+    private func availableBackupURL(for original: URL) -> URL {
+        let directory = backupDirectory()
+        let baseName = original.deletingPathExtension().lastPathComponent
+        let ext = original.pathExtension
+        let fileName = "\(baseName)-\(UUID().uuidString).kompakt-original"
+        return directory.appendingPathComponent(fileName).appendingPathExtension(ext)
+    }
+
+    private func backupDirectory() -> URL {
+        let baseDirectory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory
+        let directory = baseDirectory.appendingPathComponent("Kompakt/Backups", isDirectory: true)
+
+        if !FileManager.default.fileExists(atPath: directory.path) {
+            try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        }
+
+        return directory
     }
 
     private func availableCopyURL(for original: URL, format: FileFormat) -> URL {
@@ -142,6 +171,11 @@ actor CompressionQueue {
         let values = try url.resourceValues(forKeys: [.fileSizeKey])
         return Int64(values.fileSize ?? 0)
     }
+}
+
+private struct SavedFile {
+    let outputURL: URL
+    let backupURL: URL?
 }
 
 struct OptimizerCommandCatalog {

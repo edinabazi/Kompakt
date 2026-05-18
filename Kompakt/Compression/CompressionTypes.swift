@@ -30,7 +30,7 @@ enum OutputMode: String, CaseIterable, Identifiable {
     }
 }
 
-enum VideoCompressionMode: String, Identifiable {
+enum VideoCompressionMode: String, CaseIterable, Identifiable {
     case sameResolution
     case downscale1080
     case downscale720
@@ -136,6 +136,16 @@ struct OptimizableFileSummary: Equatable {
         let kind = kinds.count == 1 ? (kinds.first ?? .file) : .file
         return OptimizableFileSummary(count: urls.count, kind: kind)
     }
+
+    static func fromFileHints(_ urls: [URL]) -> OptimizableFileSummary {
+        guard !urls.isEmpty else { return fallback }
+
+        let kinds = Set(urls.map { url in
+            FileFormatDetector.detect(url)?.optimizableKind ?? .file
+        })
+        let kind = kinds.count == 1 ? (kinds.first ?? .file) : .file
+        return OptimizableFileSummary(count: urls.count, kind: kind)
+    }
 }
 
 enum CompressionStatus: Equatable {
@@ -143,11 +153,12 @@ enum CompressionStatus: Equatable {
     case running
     case skipped(String)
     case finished
+    case reverted
     case failed(String)
 
     var isFinished: Bool {
         switch self {
-        case .skipped, .finished, .failed:
+        case .skipped, .finished, .reverted, .failed:
             true
         case .queued, .running:
             false
@@ -160,6 +171,7 @@ enum CompressionStatus: Equatable {
         case .running: "Optimizing."
         case .skipped(let reason): reason
         case .finished: "Optimized."
+        case .reverted: "Reverted."
         case .failed(let reason): reason
         }
     }
@@ -167,6 +179,7 @@ enum CompressionStatus: Equatable {
 
 struct CompressionResult: Equatable {
     let outputURL: URL
+    let backupURL: URL?
     let originalSize: Int64
     let compressedSize: Int64
     let toolName: String
@@ -186,6 +199,8 @@ struct CompressionBatchSummary: Equatable {
     let compressedSize: Int64
     let optimizedCount: Int
     let totalCount: Int
+    let percentSmallerText: String
+    let sizeChangeText: String
 
     var bytesSaved: Int64 {
         max(0, originalSize - compressedSize)
@@ -196,32 +211,30 @@ struct CompressionBatchSummary: Equatable {
         return Double(bytesSaved) / Double(originalSize)
     }
 
-    var percentSmallerText: String {
-        let percent = Int((savingsRatio * 100).rounded())
-        return "\(percent)% smaller"
-    }
-
-    var sizeChangeText: String {
-        let original = ByteCountFormatter.string(fromByteCount: originalSize, countStyle: .file)
-        let compressed = ByteCountFormatter.string(fromByteCount: compressedSize, countStyle: .file)
-        return "\(original) -> \(compressed)"
-    }
-
     static func from(_ jobs: [CompressionJob]) -> CompressionBatchSummary? {
         let results = jobs.compactMap(\.result)
         guard !results.isEmpty else { return nil }
+        let originalSize = results.reduce(0) { $0 + $1.originalSize }
+        let compressedSize = results.reduce(0) { $0 + $1.compressedSize }
+        let bytesSaved = max(0, originalSize - compressedSize)
+        let savingsRatio = originalSize > 0 ? Double(bytesSaved) / Double(originalSize) : 0
+        let original = ByteCountFormatter.string(fromByteCount: originalSize, countStyle: .file)
+        let compressed = ByteCountFormatter.string(fromByteCount: compressedSize, countStyle: .file)
 
         return CompressionBatchSummary(
-            originalSize: results.reduce(0) { $0 + $1.originalSize },
-            compressedSize: results.reduce(0) { $0 + $1.compressedSize },
+            originalSize: originalSize,
+            compressedSize: compressedSize,
             optimizedCount: results.count,
-            totalCount: jobs.count
+            totalCount: jobs.count,
+            percentSmallerText: "\(Int((savingsRatio * 100).rounded()))% smaller",
+            sizeChangeText: "\(original) -> \(compressed)"
         )
     }
 }
 
 struct CompressionJob: Identifiable, Equatable {
     let id = UUID()
+    let batchID: UUID
     let url: URL
     let mode: CompressionMode
     let videoMode: VideoCompressionMode?

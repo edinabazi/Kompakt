@@ -23,9 +23,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             dragMonitor.start()
         }
 
-        DispatchQueue.main.async {
-            controller.showPopover()
-        }
     }
 
     func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool {
@@ -34,7 +31,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func application(_ sender: NSApplication, openFiles filenames: [String]) {
         Task { @MainActor in
-            menuBarController?.showPopover()
             AppModel.shared.handleDropped(paths: filenames)
             sender.reply(toOpenOrPrint: .success)
         }
@@ -42,7 +38,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func application(_ application: NSApplication, open urls: [URL]) {
         Task { @MainActor in
-            menuBarController?.showPopover()
             AppModel.shared.handleDropped(urls: urls)
         }
     }

@@ -14,6 +14,36 @@ enum ExternalDragClassifier {
         supportedURLs(from: pasteboard.pasteboardItems ?? [])
     }
 
+    static func fileURLs(from pasteboard: NSPasteboard) -> [URL] {
+        fileURLs(from: pasteboard.pasteboardItems ?? [])
+    }
+
+    static func hasFileURLs(_ pasteboard: NSPasteboard) -> Bool {
+        hasFileURLs(pasteboard.pasteboardItems ?? [])
+    }
+
+    static func hasSupportedFileURLs(_ pasteboard: NSPasteboard) -> Bool {
+        !supportedURLs(from: pasteboard).isEmpty
+    }
+
+    static func hasSupportedFileHints(_ pasteboard: NSPasteboard) -> Bool {
+        hasSupportedFileHints(pasteboard.pasteboardItems ?? [])
+    }
+
+    static func supportedFileHintURLs(_ pasteboard: NSPasteboard) -> [URL] {
+        supportedFileHintURLs(pasteboard.pasteboardItems ?? [])
+    }
+
+    static func hasFileURLs(_ items: [NSPasteboardItem]) -> Bool {
+        !items.isEmpty
+            && !items.contains(where: hasPromisedFileType)
+            && items.contains { item in
+                item.types.contains(.fileURL)
+                    || item.types.contains(.URL)
+                    || item.types.contains(.string)
+            }
+    }
+
     static func supportedURLs(from items: [NSPasteboardItem]) -> [URL] {
         guard !items.isEmpty, !items.contains(where: hasPromisedFileType) else {
             return []
@@ -23,6 +53,23 @@ enum ExternalDragClassifier {
         guard !urls.isEmpty else { return [] }
 
         return FileCollector.collectFiles(from: urls)
+    }
+
+    static func fileURLs(from items: [NSPasteboardItem]) -> [URL] {
+        guard !items.isEmpty, !items.contains(where: hasPromisedFileType) else {
+            return []
+        }
+
+        return items.compactMap(fileURL(from:))
+    }
+
+    private static func hasSupportedFileHints(_ items: [NSPasteboardItem]) -> Bool {
+        !supportedFileHintURLs(items).isEmpty
+    }
+
+    private static func supportedFileHintURLs(_ items: [NSPasteboardItem]) -> [URL] {
+        guard hasFileURLs(items) else { return [] }
+        return items.compactMap(fileURL(from:)).filter { FileCollector.canAcceptDropHint($0) }
     }
 
     private static func hasPromisedFileType(_ item: NSPasteboardItem) -> Bool {

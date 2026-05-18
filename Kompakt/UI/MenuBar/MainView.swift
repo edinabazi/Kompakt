@@ -1,12 +1,10 @@
 import SwiftUI
-import UniformTypeIdentifiers
 
 struct MainView: View {
     @EnvironmentObject private var appModel: AppModel
-    @State private var isDropTargeted = false
 
     private var isDropActive: Bool {
-        isDropTargeted || appModel.externalDragActive
+        appModel.externalDragActive
     }
 
     var body: some View {
@@ -21,9 +19,6 @@ struct MainView: View {
         }
         .frame(width: 360, height: 480)
         .background(AppBackground())
-        .onDrop(of: [.fileURL], isTargeted: $isDropTargeted) { providers in
-            loadDroppedFiles(providers)
-        }
     }
 
     private var header: some View {
@@ -221,25 +216,6 @@ struct MainView: View {
         .padding(22)
     }
 
-    private func loadDroppedFiles(_ providers: [NSItemProvider]) -> Bool {
-        for provider in providers {
-            provider.loadItem(forTypeIdentifier: "public.file-url", options: nil) { item, _ in
-                let url: URL?
-                if let data = item as? Data {
-                    url = URL(dataRepresentation: data, relativeTo: nil)
-                } else {
-                    url = item as? URL
-                }
-
-                guard let url else { return }
-                Task { @MainActor in
-                    appModel.endExternalDrag(didDrop: true)
-                    appModel.handleDropped(urls: [url])
-                }
-            }
-        }
-        return true
-    }
 }
 
 private struct VideoChoiceButton: View {

@@ -24,10 +24,10 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		C2791C6A2FB8FAB500EACA22 /* Signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Signing.xcconfig; sourceTree = "<group>"; };
 		C2791C3F2FB8FAB400EACA22 /* Kompakt.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Kompakt.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C2791C4C2FB8FAB500EACA22 /* KompaktTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = KompaktTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C2791C562FB8FAB500EACA22 /* KompaktUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = KompaktUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		C2791C6A2FB8FAB500EACA22 /* Signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Signing.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -73,33 +73,33 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-			C2791C362FB8FAB400EACA22 = {
-				isa = PBXGroup;
-				children = (
-					C2791C6B2FB8FAB500EACA22 /* Config */,
-					C2791C412FB8FAB400EACA22 /* Kompakt */,
-					C2791C4F2FB8FAB500EACA22 /* KompaktTests */,
-					C2791C592FB8FAB500EACA22 /* KompaktUITests */,
-					C2791C402FB8FAB400EACA22 /* Products */,
-				);
-				sourceTree = "<group>";
-			};
-			C2791C6B2FB8FAB500EACA22 /* Config */ = {
-				isa = PBXGroup;
-				children = (
-					C2791C6A2FB8FAB500EACA22 /* Signing.xcconfig */,
-				);
-				path = Config;
-				sourceTree = "<group>";
-			};
-			C2791C402FB8FAB400EACA22 /* Products */ = {
-				isa = PBXGroup;
-				children = (
+		C2791C362FB8FAB400EACA22 = {
+			isa = PBXGroup;
+			children = (
+				C2791C6B2FB8FAB500EACA22 /* Config */,
+				C2791C412FB8FAB400EACA22 /* Kompakt */,
+				C2791C4F2FB8FAB500EACA22 /* KompaktTests */,
+				C2791C592FB8FAB500EACA22 /* KompaktUITests */,
+				C2791C402FB8FAB400EACA22 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		C2791C402FB8FAB400EACA22 /* Products */ = {
+			isa = PBXGroup;
+			children = (
 				C2791C3F2FB8FAB400EACA22 /* Kompakt.app */,
 				C2791C4C2FB8FAB500EACA22 /* KompaktTests.xctest */,
 				C2791C562FB8FAB500EACA22 /* KompaktUITests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		C2791C6B2FB8FAB500EACA22 /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				C2791C6A2FB8FAB500EACA22 /* Signing.xcconfig */,
+			);
+			path = Config;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -304,10 +304,10 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
-			C2791C5E2FB8FAB500EACA22 /* Debug */ = {
-				isa = XCBuildConfiguration;
-				baseConfigurationReference = C2791C6A2FB8FAB500EACA22 /* Signing.xcconfig */;
-				buildSettings = {
+		C2791C5E2FB8FAB500EACA22 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = C2791C6A2FB8FAB500EACA22 /* Signing.xcconfig */;
+			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
@@ -368,10 +368,10 @@
 			};
 			name = Debug;
 		};
-			C2791C5F2FB8FAB500EACA22 /* Release */ = {
-				isa = XCBuildConfiguration;
-				baseConfigurationReference = C2791C6A2FB8FAB500EACA22 /* Signing.xcconfig */;
-				buildSettings = {
+		C2791C5F2FB8FAB500EACA22 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = C2791C6A2FB8FAB500EACA22 /* Signing.xcconfig */;
+			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;

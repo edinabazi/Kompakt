@@ -6,6 +6,19 @@ enum FileCollector {
         "mp4", "mov", "m4v"
     ]
 
+    static func canAcceptDropHint(_ url: URL) -> Bool {
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) else {
+            return false
+        }
+
+        if isDirectory.boolValue {
+            return (try? url.resourceValues(forKeys: [.isPackageKey]).isPackage) != true
+        }
+
+        return isSupported(url)
+    }
+
     static func collectFiles(from urls: [URL]) -> [URL] {
         urls.flatMap(collectFiles(from:))
     }
@@ -18,6 +31,10 @@ enum FileCollector {
 
         if !isDirectory.boolValue {
             return isSupported(url) ? [url.standardizedFileURL] : []
+        }
+
+        if (try? url.resourceValues(forKeys: [.isPackageKey]).isPackage) == true {
+            return []
         }
 
         guard let enumerator = FileManager.default.enumerator(

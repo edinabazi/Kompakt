@@ -1,33 +1,37 @@
 import AppKit
+import Combine
 import SwiftUI
 
 @MainActor
 final class ExternalDropZoneController {
     private let appModel: AppModel
     private var panel: NSPanel?
+    private var presentation: DropZonePresentation?
+    private var generation = 0
     private let visualWidth: CGFloat = 470
     private let edgeGutter: CGFloat = 96
+    private let enterAnimationDuration: TimeInterval = 0.28
+    private let exitAnimationDuration: TimeInterval = 0.15
+    private let animationTiming = CAMediaTimingFunction(controlPoints: 0.39, 0.57, 0.22, 0.95)
 
     init(appModel: AppModel) {
         self.appModel = appModel
     }
 
     func show() {
+        generation += 1
         let screen = screenForMouse()
-        let panelWidth = min(visualWidth + edgeGutter, screen.frame.width)
-        let frame = NSRect(
-            x: screen.frame.maxX - panelWidth,
-            y: screen.frame.minY,
-            width: panelWidth,
-            height: screen.frame.height
-        )
+        let frame = visibleFrame(on: screen)
 
         if let panel {
             panel.setFrame(frame, display: true)
             panel.orderFrontRegardless()
+            animateContent(isVisible: true)
             return
         }
 
+        let presentation = DropZonePresentation()
+        let effectLeadingGutter = edgeGutter
         let panel = DropZonePanel(
             contentRect: frame,
             styleMask: [.borderless, .nonactivatingPanel],
@@ -36,7 +40,9 @@ final class ExternalDropZoneController {
         )
 
         let hostingController = NSHostingController(
-            rootView: ExternalDropZoneView(effectLeadingGutter: edgeGutter)
+            rootView: ExternalDropZonePresentationView(presentation: presentation) {
+                ExternalDropZoneView(effectLeadingGutter: effectLeadingGutter)
+            }
                 .environmentObject(appModel)
         )
         hostingController.view.wantsLayer = true
@@ -57,17 +63,69 @@ final class ExternalDropZoneController {
         panel.makeKey()
 
         self.panel = panel
+        self.presentation = presentation
+        animateContent(isVisible: true)
     }
 
     func endDrag(didDrop: Bool) {
         guard !didDrop else { return }
-        panel?.orderOut(nil)
-        panel = nil
+        guard let panel else { return }
+
+        let closingGeneration = generation
+        animateContent(isVisible: false)
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + exitAnimationDuration) { [weak self, weak panel] in
+            MainActor.assumeIsolated {
+                guard self?.generation == closingGeneration else { return }
+                panel?.orderOut(nil)
+                if self?.panel === panel {
+                    self?.panel = nil
+                    self?.presentation = nil
+                }
+            }
+        }
     }
 
     private func screenForMouse() -> NSScreen {
         let mouseLocation = NSEvent.mouseLocation
         return NSScreen.screens.first { NSMouseInRect(mouseLocation, $0.frame, false) } ?? NSScreen.main ?? NSScreen.screens[0]
+    }
+
+    private func visibleFrame(on screen: NSScreen) -> NSRect {
+        let panelWidth = min(visualWidth + edgeGutter, screen.frame.width)
+        return NSRect(
+            x: screen.frame.maxX - panelWidth,
+            y: screen.frame.minY,
+            width: panelWidth,
+            height: screen.frame.height
+        )
+    }
+
+    private func animateContent(isVisible: Bool) {
+        if isVisible {
+            withAnimation(.timingCurve(0.39, 0.57, 0.22, 0.95, duration: enterAnimationDuration)) {
+                presentation?.isVisible = true
+            }
+        } else {
+            withAnimation(.timingCurve(0.39, 0.57, 0.22, 0.95, duration: exitAnimationDuration)) {
+                presentation?.isVisible = false
+            }
+        }
+    }
+}
+
+private final class DropZonePresentation: ObservableObject {
+    @Published var isVisible = false
+}
+
+private struct ExternalDropZonePresentationView<Content: View>: View {
+    @ObservedObject var presentation: DropZonePresentation
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        content
+            .scaleEffect(x: presentation.isVisible ? 1 : 0.001, y: 1, anchor: .trailing)
+            .opacity(presentation.isVisible ? 1 : 0)
     }
 }
 

@@ -1,4 +1,5 @@
 import AppKit
+import AVFoundation
 import SwiftUI
 
 struct ExternalDropZoneView: View {
@@ -6,8 +7,8 @@ struct ExternalDropZoneView: View {
 
     @EnvironmentObject private var appModel: AppModel
     @State private var isTargeted = false
+    @State private var dragLocation: CGPoint?
     @State private var phase: DropZonePhase = .idle
-    @State private var isPulsing = false
     @State private var pendingURLs: [URL] = []
     @State private var previewURLs: [URL] = []
     @State private var previewTotalCount = 0
@@ -26,28 +27,24 @@ struct ExternalDropZoneView: View {
                 LinearGradient(
                     stops: [
                         .init(color: .black.opacity(0), location: 0),
-                        .init(color: .black.opacity(0), location: 0.22),
-                        .init(color: .black.opacity(0.84), location: 1)
+                        .init(color: .black.opacity(0), location: 0.34),
+                        .init(color: .black.opacity(0.12), location: 0.72),
+                        .init(color: .black.opacity(0.34), location: 1)
                     ],
                     startPoint: .leading,
                     endPoint: .trailing
                 )
                 .ignoresSafeArea()
 
-                SideGlowView(phase: phase, isTargeted: isTargeted, isPulsing: isPulsing)
-
-                if phase == .processing {
-                    ProcessingBackgroundPulse()
-                        .ignoresSafeArea()
-                        .transition(.opacity)
-                }
+                HoverColorBloomView(isActive: isTargeted && phase.acceptsDrops)
+                    .ignoresSafeArea()
             }
 
             centerContent
                 .padding(.leading, effectLeadingGutter)
 
             if phase.acceptsDrops {
-                DropReceiverView(isTargeted: $isTargeted, onDrop: loadDroppedURLs)
+                DropReceiverView(isTargeted: $isTargeted, dragLocation: $dragLocation, onDrop: loadDroppedURLs)
                     .ignoresSafeArea()
             }
         }
@@ -55,11 +52,6 @@ struct ExternalDropZoneView: View {
         .contentShape(Rectangle())
         .animation(.easeInOut(duration: 0.25), value: phase)
         .animation(.easeInOut(duration: 0.18), value: isTargeted)
-        .onAppear {
-            withAnimation(.easeInOut(duration: 1.15).repeatForever(autoreverses: true)) {
-                isPulsing = true
-            }
-        }
     }
 
     @ViewBuilder
@@ -93,6 +85,9 @@ struct ExternalDropZoneView: View {
                     }
                 }
                 .padding(.top, 4)
+
+                escapeHint
+                    .padding(.top, 2)
             }
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
@@ -104,7 +99,10 @@ struct ExternalDropZoneView: View {
                 }
 
                 completionBadge
+
+                escapeHint
             }
+            .compositingGroup()
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
             .transition(.opacity.combined(with: .scale(scale: 0.94)))
         } else {
@@ -113,16 +111,49 @@ struct ExternalDropZoneView: View {
                     FilePreviewStack(urls: previewURLs, totalCount: previewTotalCount)
                 }
 
-                Text(phase.title(summary: effectiveSummary))
-                    .font(.system(size: 16, weight: .medium))
-                    .tracking(-0.64)
-                    .foregroundStyle(.white.opacity(phase == .idle && !isTargeted ? 0.88 : 1))
+                titleView
                     .scaleEffect(phase.textScale(isTargeted: isTargeted))
                     .blur(radius: phase.textBlur)
+                    .modifier(HoverTextMagnet(isActive: isTargeted && phase.acceptsDrops, dragLocation: dragLocation))
+
+                escapeHint
             }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                 .transition(.opacity.combined(with: .scale(scale: 0.98)))
         }
+    }
+
+    @ViewBuilder
+    private var titleView: some View {
+        if phase == .processing {
+            ThinkingText(phase.title(summary: effectiveSummary))
+        } else {
+            Text(phase.title(summary: effectiveSummary))
+                .font(.system(size: 16, weight: .medium))
+                .tracking(-0.64)
+                .foregroundStyle(.white.opacity(phase == .idle && !isTargeted ? 0.88 : 1))
+        }
+    }
+
+    private var escapeHint: some View {
+        HStack(spacing: 6) {
+            Text("ESC")
+                .font(.system(size: 10, weight: .semibold))
+                .tracking(0.2)
+                .foregroundStyle(.white.opacity(0.78))
+                .padding(.horizontal, 6)
+                .frame(height: 20)
+                .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 5))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 5)
+                        .stroke(.white.opacity(0.16), lineWidth: 1)
+                }
+
+            Text("to close")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.white.opacity(0.48))
+        }
+        .accessibilityLabel("Escape to close")
     }
 
     private var completionBadge: some View {
@@ -157,6 +188,7 @@ struct ExternalDropZoneView: View {
                 .stroke(.white.opacity(0.18), lineWidth: 1)
         }
         .shadow(color: .black.opacity(0.24), radius: 18, y: 10)
+        .compositingGroup()
     }
 
     private func choiceButton(_ title: String, mode: CompressionMode) -> some View {
@@ -199,11 +231,22 @@ struct ExternalDropZoneView: View {
     }
 
     private func loadDroppedURLs(_ urls: [URL]) {
-        phase = .accepted
+        fileSummary = OptimizableFileSummary.fromFileHints(urls)
+        phase = .processing
         appModel.endExternalDrag(didDrop: true)
 
-        let fileURLs = FileCollector.collectFiles(from: urls)
+        Task {
+            let fileURLs = await Task.detached(priority: .userInitiated) {
+                FileCollector.collectFiles(from: urls)
+            }.value
 
+            await MainActor.run {
+                finishLoadingDroppedFiles(fileURLs)
+            }
+        }
+    }
+
+    private func finishLoadingDroppedFiles(_ fileURLs: [URL]) {
         guard !fileURLs.isEmpty else {
             previewURLs = []
             previewTotalCount = 0
@@ -218,18 +261,11 @@ struct ExternalDropZoneView: View {
 
         if appModel.compressionMode == .ask {
             pendingURLs = fileURLs
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
-                guard phase == .accepted else { return }
-                phase = .choosing(fileSummary)
-            }
+            phase = .choosing(fileSummary)
             return
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
-            guard phase == .accepted else { return }
-            phase = .processing
-        }
-
+        phase = .processing
         appModel.start(urls: fileURLs, mode: appModel.compressionMode, onFinished: completeAndDismiss)
     }
 
@@ -387,50 +423,155 @@ private struct FilePreviewStack: View {
     }
 }
 
+private struct ThinkingText: View {
+    let title: String
+
+    init(_ title: String) {
+        self.title = title
+    }
+
+    var body: some View {
+        TimelineView(.animation) { timeline in
+            let time = timeline.date.timeIntervalSinceReferenceDate
+            let progress = time.truncatingRemainder(dividingBy: 1.65) / 1.65
+
+            ZStack {
+                Text(title)
+                    .font(.system(size: 16, weight: .medium))
+                    .tracking(-0.64)
+                    .foregroundStyle(.white.opacity(0.46))
+
+                Text(title)
+                    .font(.system(size: 16, weight: .medium))
+                    .tracking(-0.64)
+                    .foregroundStyle(.white.opacity(0.96))
+                    .mask {
+                        GeometryReader { proxy in
+                            LinearGradient(
+                                stops: [
+                                    .init(color: .clear, location: 0),
+                                    .init(color: .white.opacity(0.18), location: 0.32),
+                                    .init(color: .white, location: 0.5),
+                                    .init(color: .white.opacity(0.18), location: 0.68),
+                                    .init(color: .clear, location: 1)
+                                ],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                            .frame(width: max(42, proxy.size.width * 0.52), height: proxy.size.height)
+                            .offset(x: -proxy.size.width * 0.58 + CGFloat(progress) * proxy.size.width * 1.68)
+                        }
+                    }
+            }
+            .fixedSize()
+        }
+        .allowsHitTesting(false)
+    }
+}
+
 private struct PreviewCard: View {
     let url: URL
     let size: CGFloat
+    @State private var previewImage: NSImage?
+    @State private var isVideo = false
 
     var body: some View {
-        Image(nsImage: previewImage)
-            .resizable()
-            .scaledToFill()
-            .frame(width: size, height: size)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .overlay {
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(.white.opacity(0.2), lineWidth: 1)
+        ZStack(alignment: .bottomTrailing) {
+            Image(nsImage: previewImage ?? NSWorkspace.shared.icon(forFile: url.path))
+                .resizable()
+                .scaledToFill()
+                .frame(width: size, height: size)
+
+            if isVideo {
+                Image(systemName: "play.fill")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 22, height: 22)
+                    .background(.black.opacity(0.48), in: Circle())
+                    .padding(5)
             }
-            .background {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(.black.opacity(0.22))
-            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(.white.opacity(0.2), lineWidth: 1)
+        }
+        .background {
+            RoundedRectangle(cornerRadius: 8)
+                .fill(.black.opacity(0.22))
+        }
+        .task(id: url) {
+            await loadPreview()
+        }
     }
 
-    private var previewImage: NSImage {
-        NSImage(contentsOf: url) ?? NSWorkspace.shared.icon(forFile: url.path)
+    @MainActor
+    private func loadPreview() async {
+        let size = size
+        let url = url
+        let preview = await Task.detached(priority: .userInitiated) {
+            PreviewLoader.load(url: url, size: size)
+        }.value
+
+        previewImage = preview.image
+        isVideo = preview.isVideo
+    }
+}
+
+private enum PreviewLoader {
+    struct Preview {
+        let image: NSImage?
+        let isVideo: Bool
+    }
+
+    static func load(url: URL, size: CGFloat) -> Preview {
+        let isVideo = FileFormatDetector.detect(url)?.isVideo == true
+        let image = NSImage(contentsOf: url) ?? videoPreviewImage(for: url, size: size)
+        return Preview(image: image, isVideo: isVideo)
+    }
+
+    private static func videoPreviewImage(for url: URL, size: CGFloat) -> NSImage? {
+        guard FileFormatDetector.detect(url)?.isVideo == true else { return nil }
+
+        let asset = AVURLAsset(url: url)
+        let generator = AVAssetImageGenerator(asset: asset)
+        generator.appliesPreferredTrackTransform = true
+        generator.maximumSize = CGSize(width: size * 3, height: size * 3)
+
+        let time = CMTime(seconds: 0.5, preferredTimescale: 600)
+
+        guard let image = try? generator.copyCGImage(at: time, actualTime: nil) else {
+            return nil
+        }
+
+        return NSImage(cgImage: image, size: CGSize(width: image.width, height: image.height))
     }
 }
 
 private struct DropReceiverView: NSViewRepresentable {
     @Binding var isTargeted: Bool
+    @Binding var dragLocation: CGPoint?
     let onDrop: ([URL]) -> Void
 
     func makeNSView(context: Context) -> DropReceiverNSView {
         let view = DropReceiverNSView()
         view.onTargetChanged = { isTargeted = $0 }
+        view.onDragLocationChanged = { dragLocation = $0 }
         view.onDrop = onDrop
         return view
     }
 
     func updateNSView(_ nsView: DropReceiverNSView, context: Context) {
         nsView.onTargetChanged = { isTargeted = $0 }
+        nsView.onDragLocationChanged = { dragLocation = $0 }
         nsView.onDrop = onDrop
     }
 }
 
 private final class DropReceiverNSView: NSView {
     var onTargetChanged: ((Bool) -> Void)?
+    var onDragLocationChanged: ((CGPoint?) -> Void)?
     var onDrop: (([URL]) -> Void)?
 
     override init(frame frameRect: NSRect) {
@@ -446,29 +587,32 @@ private final class DropReceiverNSView: NSView {
     }
 
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
-        let urls = supportedURLs(from: sender)
-        let acceptsDrop = !urls.isEmpty
+        let acceptsDrop = acceptsFileURLs(from: sender)
         onTargetChanged?(acceptsDrop)
+        onDragLocationChanged?(acceptsDrop ? dragLocation(from: sender) : nil)
         return acceptsDrop ? .copy : []
     }
 
     override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
-        let acceptsDrop = !supportedURLs(from: sender).isEmpty
+        let acceptsDrop = acceptsFileURLs(from: sender)
         onTargetChanged?(acceptsDrop)
+        onDragLocationChanged?(acceptsDrop ? dragLocation(from: sender) : nil)
         return acceptsDrop ? .copy : []
     }
 
     override func draggingExited(_ sender: NSDraggingInfo?) {
         onTargetChanged?(false)
+        onDragLocationChanged?(nil)
     }
 
     override func prepareForDragOperation(_ sender: NSDraggingInfo) -> Bool {
-        !supportedURLs(from: sender).isEmpty
+        acceptsFileURLs(from: sender)
     }
 
     override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
         let urls = supportedURLs(from: sender)
         onTargetChanged?(false)
+        onDragLocationChanged?(nil)
 
         guard !urls.isEmpty else { return false }
         onDrop?(urls)
@@ -477,135 +621,178 @@ private final class DropReceiverNSView: NSView {
 
     override func concludeDragOperation(_ sender: NSDraggingInfo?) {
         onTargetChanged?(false)
+        onDragLocationChanged?(nil)
     }
 
     private func supportedURLs(from sender: NSDraggingInfo) -> [URL] {
-        ExternalDragClassifier.supportedURLs(from: sender.draggingPasteboard)
+        ExternalDragClassifier.fileURLs(from: sender.draggingPasteboard)
+    }
+
+    private func acceptsFileURLs(from sender: NSDraggingInfo) -> Bool {
+        ExternalDragClassifier.hasFileURLs(sender.draggingPasteboard)
+    }
+
+    private func dragLocation(from sender: NSDraggingInfo) -> CGPoint {
+        let location = convert(sender.draggingLocation, from: nil)
+        let width = max(bounds.width, 1)
+        let height = max(bounds.height, 1)
+        return CGPoint(
+            x: ((location.x / width) - 0.5) * 2,
+            y: (((bounds.height - location.y) / height) - 0.5) * 2
+        )
     }
 }
 
-private struct ProcessingBackgroundPulse: View {
+private struct HoverColorBloomView: View {
+    let isActive: Bool
+    @State private var revealProgress = 0.0
+
     var body: some View {
-        TimelineView(.animation) { timeline in
-            let pulse = pulseValue(at: timeline.date)
+        GeometryReader { proxy in
+            TimelineView(.animation) { timeline in
+                let time = timeline.date.timeIntervalSinceReferenceDate
+                let wave = 0.5 + 0.5 * sin(time * 2.2)
+                let drift = 0.5 + 0.5 * sin(time * 1.35 + 1.1)
+                let ripple = max(proxy.size.width, proxy.size.height) * (0.16 + 1.25 * revealProgress)
 
-            ZStack {
-                LinearGradient(
-                    stops: [
-                        .init(color: .clear, location: 0),
-                        .init(color: .clear, location: 0.18),
-                        .init(color: Color(red: 0.18, green: 0.62, blue: 1).opacity(0.18 + 0.18 * pulse), location: 0.44),
-                        .init(color: Color(red: 0.42, green: 0.84, blue: 1).opacity(0.5 + 0.34 * pulse), location: 0.78),
-                        .init(color: .white.opacity(0.24 + 0.24 * pulse), location: 1)
-                    ],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
+                ZStack {
+                    LinearGradient(
+                        stops: [
+                            .init(color: .white.opacity(0.0), location: 0),
+                            .init(color: .white.opacity(0.0), location: 0.34),
+                            .init(color: .white.opacity(0.03), location: 0.58),
+                            .init(color: .white.opacity(0.08), location: 0.78),
+                            .init(color: .white.opacity(0.14), location: 1)
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
 
+                    RadialGradient(
+                        colors: [
+                            .white.opacity(0.10),
+                            .white.opacity(0.05),
+                            .clear
+                        ],
+                        center: UnitPoint(x: 0.74 + 0.06 * wave, y: 0.42 + 0.08 * drift),
+                        startRadius: 20,
+                        endRadius: max(proxy.size.width, proxy.size.height) * 0.54
+                    )
+
+                    RadialGradient(
+                        colors: [
+                            .white.opacity(0.08),
+                            .white.opacity(0.04),
+                            .clear
+                        ],
+                        center: UnitPoint(x: 0.93 - 0.05 * drift, y: 0.72 - 0.06 * wave),
+                        startRadius: 8,
+                        endRadius: max(proxy.size.width, proxy.size.height) * 0.42
+                    )
+
+                    RippleRing(progress: revealProgress)
+                        .frame(width: proxy.size.height * 1.55, height: proxy.size.height * 1.55)
+                        .position(x: proxy.size.width * 0.94, y: proxy.size.height * (0.5 + 0.04 * wave))
+                        .opacity(isActive ? max(0, 1 - revealProgress) * 0.72 : 0)
+                }
+                .opacity(isActive ? 1 : 0)
+                .scaleEffect(0.98 + 0.04 * revealProgress, anchor: .trailing)
+                .blur(radius: isActive ? 12 : 24)
+                .blendMode(.screen)
+                .mask {
+                    RadialGradient(
+                        stops: [
+                            .init(color: .white, location: 0),
+                            .init(color: .white, location: 0.72),
+                            .init(color: .white.opacity(0), location: 1)
+                        ],
+                        center: UnitPoint(x: 0.96, y: 0.5),
+                        startRadius: max(0, ripple * 0.08),
+                        endRadius: ripple
+                    )
+                    .blur(radius: 18)
+                }
+                .mask {
+                    LinearGradient(
+                        stops: [
+                            .init(color: .clear, location: 0),
+                            .init(color: .clear, location: 0.34),
+                            .init(color: .white.opacity(0.34), location: 0.62),
+                            .init(color: .white, location: 1)
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                }
+                .animation(.interpolatingSpring(stiffness: 112, damping: 13), value: revealProgress)
+            }
+        }
+        .onAppear {
+            revealProgress = isActive ? 1 : 0
+        }
+        .onChange(of: isActive) { _, newValue in
+            withAnimation(.interpolatingSpring(stiffness: 112, damping: 13)) {
+                revealProgress = newValue ? 1 : 0
+            }
+        }
+        .allowsHitTesting(false)
+    }
+}
+
+private struct RippleRing: View {
+    let progress: Double
+
+    var body: some View {
+        Circle()
+            .stroke(
                 LinearGradient(
-                    stops: [
-                        .init(color: .clear, location: 0),
-                        .init(color: .clear, location: 0.34),
-                        .init(color: Color(red: 0.66, green: 0.9, blue: 1).opacity(0.18 * pulse), location: 0.6),
-                        .init(color: .white.opacity(0.28 * pulse), location: 0.9),
-                        .init(color: .white.opacity(0.18 * pulse), location: 1)
+                    colors: [
+                        .white.opacity(0),
+                        .white.opacity(0.22),
+                        .white.opacity(0.12),
+                        .white.opacity(0)
                     ],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
-                )
-            }
-            .opacity(0.72 + 0.28 * pulse)
-            .scaleEffect(x: 1 + 0.035 * pulse, y: 1, anchor: .trailing)
-            .blur(radius: 10 + 8 * (1 - pulse))
+                ),
+                lineWidth: 10
+            )
+            .scaleEffect(0.18 + 1.15 * progress)
+            .blur(radius: 7)
             .blendMode(.screen)
-            .allowsHitTesting(false)
-        }
-    }
-
-    private func pulseValue(at date: Date) -> Double {
-        let cycle = date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.45) / 1.45
-        return 0.5 + 0.5 * sin(cycle * 2 * .pi)
     }
 }
 
-private struct SideGlowView: View {
-    let phase: DropZonePhase
-    let isTargeted: Bool
-    let isPulsing: Bool
+private struct HoverTextMagnet: ViewModifier {
+    let isActive: Bool
+    let dragLocation: CGPoint?
 
-    var body: some View {
-        ZStack {
-            LinearGradient(
-                stops: [
-                    .init(color: .clear, location: 0),
-                    .init(color: .clear, location: 0.18),
-                    .init(color: glowColor.opacity(edgeOpacity), location: 0.68),
-                    .init(color: glowColor.opacity(peakOpacity), location: 1)
-                ],
-                startPoint: .leading,
-                endPoint: .trailing
-            )
-            .blendMode(.screen)
+    func body(content: Content) -> some View {
+        GeometryReader { proxy in
+            let center = CGPoint(x: proxy.size.width / 2, y: proxy.size.height / 2)
+            let vector = magnetVector(from: center, in: proxy.size)
 
-            RadialGradient(
-                colors: [
-                    glowColor.opacity(centerOpacity),
-                    glowColor.opacity(centerOpacity * 0.35),
-                    .clear
-                ],
-                center: .trailing,
-                startRadius: 12,
-                endRadius: phase == .accepted ? 620 : 430
-            )
-            .scaleEffect(x: phase == .accepted ? 1.35 : 1, y: phase == .accepted ? 1.08 : 1)
-            .blur(radius: phase == .finished ? 34 : 22)
-            .blendMode(.screen)
+            content
+                .frame(width: proxy.size.width, height: proxy.size.height)
+                .scaleEffect(isActive ? 1.16 : 1)
+                .offset(x: vector.x, y: vector.y)
+                .animation(.interpolatingSpring(stiffness: 185, damping: 18), value: isActive)
+                .animation(.interactiveSpring(response: 0.22, dampingFraction: 0.72), value: dragLocation)
         }
-        .opacity(phase == .idle && !isTargeted ? 0.58 : 1)
-        .scaleEffect(x: isPulsing && phase == .processing ? 1.035 : 1, y: 1)
-        .ignoresSafeArea()
-        .allowsHitTesting(false)
+        .frame(height: 24)
     }
 
-    private var glowColor: Color {
-        switch phase {
-        case .finished:
-            Color(red: 0.45, green: 1, blue: 0.78)
-        case .idle, .accepted, .choosing, .processing:
-            Color(red: 0.35, green: 0.72, blue: 1)
-        }
-    }
+    private func magnetVector(from center: CGPoint, in size: CGSize) -> CGPoint {
+        guard isActive, let dragLocation else { return .zero }
 
-    private var edgeOpacity: Double {
-        switch phase {
-        case .accepted: 0.4
-        case .choosing: 0.34
-        case .processing: isPulsing ? 0.3 : 0.2
-        case .finished: 0.5
-        case .idle: isTargeted ? 0.26 : 0.12
-        }
-    }
+        let x = max(-1, min(1, dragLocation.x))
+        let y = max(-1, min(1, dragLocation.y))
 
-    private var peakOpacity: Double {
-        switch phase {
-        case .accepted: 0.86
-        case .choosing: 0.74
-        case .processing: isPulsing ? 0.7 : 0.48
-        case .finished: 0.92
-        case .idle: isTargeted ? 0.62 : 0.34
-        }
+        return CGPoint(
+            x: x * 38 + max(0, x) * 8,
+            y: y * 32
+        )
     }
-
-    private var centerOpacity: Double {
-        switch phase {
-        case .accepted: 0.44
-        case .choosing: 0.34
-        case .processing: isPulsing ? 0.32 : 0.2
-        case .finished: 0.5
-        case .idle: isTargeted ? 0.25 : 0.12
-        }
-    }
-
 }
 
 private struct ProgressiveBlurView: NSViewRepresentable {
@@ -613,9 +800,7 @@ private struct ProgressiveBlurView: NSViewRepresentable {
         ProgressiveBlurHostView()
     }
 
-    func updateNSView(_ nsView: NSView, context: Context) {
-        nsView.needsLayout = true
-    }
+    func updateNSView(_ nsView: NSView, context: Context) {}
 }
 
 private final class ProgressiveBlurHostView: NSView {
