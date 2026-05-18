@@ -42,13 +42,28 @@ jobs:
       - name: Verify bundled optimizer tools
         run: ./Scripts/verify-bundled-tools.sh
 
+      - name: Validate release secrets
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          SPARKLE_PUBLIC_ED_KEY: ${{ secrets.SPARKLE_PUBLIC_ED_KEY }}
+          SPARKLE_PRIVATE_ED_KEY: ${{ secrets.SPARKLE_PRIVATE_ED_KEY }}
+        run: |
+          set -euo pipefail
+
+          test -n "$SPARKLE_PUBLIC_ED_KEY"
+          test -n "$SPARKLE_PRIVATE_ED_KEY"
+
       - name: Run tests
+        env:
+          SPARKLE_PUBLIC_ED_KEY: ${{ secrets.SPARKLE_PUBLIC_ED_KEY }}
+          SPARKLE_PRIVATE_ED_KEY: ${{ secrets.SPARKLE_PRIVATE_ED_KEY }}
         run: |
           xcodebuild test \
             -scheme "$SCHEME" \
             -project "$PROJECT_PATH" \
             -destination 'platform=macOS' \
-            CODE_SIGNING_ALLOWED=NO
+            CODE_SIGNING_ALLOWED=NO \
+            SPARKLE_PUBLIC_ED_KEY="${SPARKLE_PUBLIC_ED_KEY:-local-development-key}"
 
       - name: Import Developer ID certificate
         env:
@@ -80,6 +95,7 @@ jobs:
       - name: Archive app
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          SPARKLE_PUBLIC_ED_KEY: ${{ secrets.SPARKLE_PUBLIC_ED_KEY }}
         run: |
           set -euo pipefail
 
@@ -92,7 +108,8 @@ jobs:
             DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
             CODE_SIGN_STYLE=Manual \
             CODE_SIGN_IDENTITY="Developer ID Application" \
-            PROVISIONING_PROFILE_SPECIFIER=""
+            PROVISIONING_PROFILE_SPECIFIER="" \
+            SPARKLE_PUBLIC_ED_KEY="${SPARKLE_PUBLIC_ED_KEY:-local-development-key}"
 
       - name: Prepare export options
         env:
@@ -152,6 +169,46 @@ jobs:
 
           ditto -c -k --keepParent "$EXPORT_PATH/$APP_NAME.app" "build/$APP_NAME.zip"
           shasum -a 256 "build/$APP_NAME.zip" > "build/$APP_NAME.zip.sha256"
+
+      - name: Publish Sparkle appcast
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SPARKLE_PRIVATE_ED_KEY: ${{ secrets.SPARKLE_PRIVATE_ED_KEY }}
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git ls-remote --exit-code --heads origin gh-pages >/dev/null 2>&1; then
+            git fetch origin gh-pages
+            git worktree add build/pages origin/gh-pages
+          else
+            mkdir -p build/pages
+          fi
+
+          versioned_zip="$APP_NAME-${GITHUB_REF_NAME}.zip"
+          cp "build/$APP_NAME.zip" "build/pages/$versioned_zip"
+          printf '# %s %s\n\nSigned and notarized macOS release.\n' "$APP_NAME" "$GITHUB_REF_NAME" > "build/pages/$APP_NAME-${GITHUB_REF_NAME}.md"
+
+          generate_appcast="$(find "$HOME/Library/Developer/Xcode/DerivedData" -path '*/SourcePackages/artifacts/sparkle/Sparkle/bin/generate_appcast' -type f | head -n 1)"
+          test -x "$generate_appcast"
+
+          echo "$SPARKLE_PRIVATE_ED_KEY" | "$generate_appcast" \
+            --ed-key-file - \
+            --download-url-prefix "https://edinabazi.github.io/Kompakt" \
+            --link "https://github.com/edinabazi/Kompakt" \
+            build/pages
+
+          cd build/pages
+          if [ ! -d .git ] && [ ! -f .git ]; then
+            git init
+          fi
+          git checkout -B gh-pages
+          git add .
+          git commit -m "Update Sparkle appcast for ${GITHUB_REF_NAME}"
+          git push origin HEAD:gh-pages
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4

@@ -109,6 +109,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         clearItem.isEnabled = !appModel.completedJobs.isEmpty
         menu.addItem(.separator())
 
+        addAction("Check for Updates...", action: #selector(checkForUpdates))
         addAction("About Kompakt", action: #selector(showAbout))
         menu.addItem(.separator())
         addAction("Quit Kompakt", action: #selector(quit))
@@ -252,6 +253,10 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     @objc private func showAbout() {
         NSApp.activate(ignoringOtherApps: true)
         NSApp.orderFrontStandardAboutPanel(nil)
+    }
+
+    @objc private func checkForUpdates() {
+        AppUpdater.shared.checkForUpdates()
     }
 
     @objc private func quit() {

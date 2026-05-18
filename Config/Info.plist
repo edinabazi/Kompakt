@@ -148,5 +148,11 @@
 	<true/>
 	<key>NSHumanReadableCopyright</key>
 	<string>Open Source</string>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUFeedURL</key>
+	<string>https://edinabazi.github.io/Kompakt/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>$(SPARKLE_PUBLIC_ED_KEY)</string>
 </dict>
 </plist>

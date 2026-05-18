@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		C2791C702FB8FAB600EACA22 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = C2791C712FB8FAB600EACA22 /* Sparkle */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		C2791C4D2FB8FAB500EACA22 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -53,6 +57,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C2791C702FB8FAB600EACA22 /* Sparkle in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -123,6 +128,7 @@
 			);
 			name = Kompakt;
 			packageProductDependencies = (
+				C2791C712FB8FAB600EACA22 /* Sparkle */,
 			);
 			productName = Kompakt;
 			productReference = C2791C3F2FB8FAB400EACA22 /* Kompakt.app */;
@@ -206,6 +212,9 @@
 			);
 			mainGroup = C2791C362FB8FAB400EACA22;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				C2791C722FB8FAB600EACA22 /* XCRemoteSwiftPackageReference "Sparkle" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = C2791C402FB8FAB400EACA22 /* Products */;
 			projectDirPath = "";
@@ -302,6 +311,25 @@
 			targetProxy = C2791C572FB8FAB500EACA22 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		C2791C722FB8FAB600EACA22 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.7.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		C2791C712FB8FAB600EACA22 /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C2791C722FB8FAB600EACA22 /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
+		};
+/* End XCSwiftPackageProductDependency section */
 
 /* Begin XCBuildConfiguration section */
 		C2791C5E2FB8FAB500EACA22 /* Debug */ = {
