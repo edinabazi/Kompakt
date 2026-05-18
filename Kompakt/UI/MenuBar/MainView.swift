@@ -61,9 +61,9 @@ struct MainView: View {
             }
 
             VStack(spacing: 6) {
-                Text("Drop files or folders")
+                Text("Drop files to Kompakt")
                     .font(.system(size: 19, weight: .semibold, design: .rounded))
-                Text("Or open files with Kompakt from Finder.")
+                Text("Images and videos optimized locally on your Mac.")
                     .font(.system(size: 13, weight: .medium, design: .rounded))
                     .foregroundStyle(.secondary)
             }
@@ -91,7 +91,7 @@ struct MainView: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Compress \(summary.count) \(summary.noun)")
+                    Text("Kompakt \(summary.count) \(summary.noun)")
                         .font(.system(size: 18, weight: .semibold, design: .rounded))
                     Text(summary.kind == .video ? "Choose the video output size." : "Choose how aggressively Kompakt should work.")
                         .font(.system(size: 12, weight: .medium, design: .rounded))
@@ -132,7 +132,7 @@ struct MainView: View {
                         appModel.choosePendingAskMode(.lossless)
                     }
 
-                    ChoiceButton(title: "Smaller", subtitle: "Balanced lossy compression", systemImage: "arrow.down.right.and.arrow.up.left") {
+                    ChoiceButton(title: "Smaller", subtitle: "Balanced lossy optimization", systemImage: "arrow.down.right.and.arrow.up.left") {
                         appModel.choosePendingAskMode(.smaller)
                     }
                 }
@@ -269,7 +269,7 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
-            Picker("Default compression", selection: $appModel.compressionMode) {
+            Picker("Default optimization", selection: $appModel.compressionMode) {
                 ForEach(CompressionMode.allCases) { mode in
                     Text(mode.title).tag(mode)
                 }

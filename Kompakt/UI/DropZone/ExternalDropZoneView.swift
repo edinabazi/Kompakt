@@ -60,7 +60,7 @@ struct ExternalDropZoneView: View {
             VStack(spacing: 14) {
                 FilePreviewStack(urls: previewURLs, totalCount: summary.count)
 
-                Text(summary.kind == .video ? "Choose video size" : "Choose compression")
+                Text(summary.kind == .video ? "Choose video size" : "Choose optimization")
                     .font(.system(size: 16, weight: .semibold))
                     .tracking(-0.64)
 
@@ -357,11 +357,11 @@ private enum DropZonePhase: Equatable {
 
     func title(summary: OptimizableFileSummary) -> String {
         switch self {
-        case .idle: "Optimize \(summary.noun)"
+        case .idle: "Kompakt \(summary.noun)"
         case .accepted: "Drop received"
-        case .choosing: "Choose compression"
-        case .processing: "Optimizing \(summary.noun)"
-        case .finished: "Optimized \(summary.noun)"
+        case .choosing: "Choose optimization"
+        case .processing: "Kompakting \(summary.noun)"
+        case .finished: "Kompakted \(summary.noun)"
         }
     }
 

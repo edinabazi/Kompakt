@@ -15,7 +15,7 @@ final class AppModel: ObservableObject {
     @Published private(set) var jobs: [CompressionJob] = []
     @Published private(set) var isProcessing = false
     @Published private(set) var progress: Double = 0
-    @Published private(set) var lastMessage = "Drop files to optimize."
+    @Published private(set) var lastMessage = "Drop files to Kompakt."
     @Published private(set) var pendingAskSummary: OptimizableFileSummary?
     @Published private(set) var externalDragActive = false
     @Published private(set) var externalDragSummary = OptimizableFileSummary.fallback
@@ -80,7 +80,7 @@ final class AppModel: ObservableObject {
         case .ask:
             pendingAskURLs = fileURLs
             pendingAskSummary = OptimizableFileSummary.fromCollectedFiles(fileURLs)
-            lastMessage = "Choose compression for \(fileURLs.count) file\(fileURLs.count == 1 ? "" : "s")."
+            lastMessage = "Choose optimization for \(fileURLs.count) file\(fileURLs.count == 1 ? "" : "s")."
         case .lossless, .smaller:
             start(urls: fileURLs, mode: compressionMode)
         }
@@ -274,6 +274,6 @@ final class AppModel: ObservableObject {
     private func summaryMessage() -> String {
         let finished = completedJobs.count
         let saved = ByteCountFormatter.string(fromByteCount: totalBytesSaved, countStyle: .file)
-        return finished == 0 ? "Ready." : "Compressed \(finished) file\(finished == 1 ? "" : "s") · saved \(saved)."
+        return finished == 0 ? "Ready." : "\(finished) file\(finished == 1 ? "" : "s") kompakted · \(saved) saved."
     }
 }

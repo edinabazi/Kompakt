@@ -58,7 +58,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         menu.addItem(.separator())
 
         if let summary = appModel.pendingAskSummary {
-            menu.addItem(disabledTitle: "Compress \(summary.count) \(summary.noun)")
+            menu.addItem(disabledTitle: "Kompakt \(summary.count) \(summary.noun)")
 
             if summary.kind == .video {
                 addAction("Same Size", action: #selector(chooseSameResolution))
@@ -73,12 +73,12 @@ final class MenuBarController: NSObject, NSMenuDelegate {
             menu.addItem(.separator())
         }
 
-        addAction("Open Files...", action: #selector(openFiles))
-        addAction("Open Folder...", action: #selector(openFolder))
+        addAction("Kompakt Files...", action: #selector(openFiles))
+        addAction("Kompakt Folder...", action: #selector(openFolder))
         menu.addItem(.separator())
 
         menu.addItem(settingsSubmenu(
-            title: "Compression",
+            title: "Optimization",
             cases: CompressionMode.allCases,
             selected: appModel.compressionMode,
             action: #selector(setCompressionMode(_:))
@@ -108,7 +108,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         let revealItem = addAction("Show Last Output in Finder", action: #selector(showLastOutput))
         revealItem.isEnabled = appModel.jobs.contains { $0.result != nil }
 
-        let revertItem = addAction("Revert Last Compression", action: #selector(revertLastCompression))
+        let revertItem = addAction("Revert Last Kompakt", action: #selector(revertLastCompression))
         revertItem.isEnabled = appModel.canRevertLastCompression
 
         let clearItem = addAction("Clear Finished Items", action: #selector(clearFinishedItems))

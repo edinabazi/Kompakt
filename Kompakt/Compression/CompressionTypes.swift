@@ -168,9 +168,9 @@ enum CompressionStatus: Equatable {
     var message: String {
         switch self {
         case .queued: "Waiting."
-        case .running: "Optimizing."
+        case .running: "Kompakting..."
         case .skipped(let reason): reason
-        case .finished: "Optimized."
+        case .finished: "Kompakted."
         case .reverted: "Reverted."
         case .failed(let reason): reason
         }
