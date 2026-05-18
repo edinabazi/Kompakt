@@ -11,6 +11,7 @@ final class AppModel: ObservableObject {
     @AppStorage("outputMode") var outputMode: OutputMode = .replaceOriginals
     @AppStorage("defaultVideoMode") var defaultVideoMode: VideoCompressionMode = .sameResolution
     @AppStorage("showEscapeHint") var showEscapeHint = true
+    @AppStorage("hasSeenFirstLaunchOnboarding") private var hasSeenFirstLaunchOnboarding = false
 
     @Published private(set) var jobs: [CompressionJob] = []
     @Published private(set) var isProcessing = false
@@ -24,6 +25,8 @@ final class AppModel: ObservableObject {
     private weak var menuBarController: MenuBarController?
     private weak var externalDropZoneController: ExternalDropZoneController?
     private var pendingAskURLs: [URL] = []
+    private var firstLaunchOnboardingActive = false
+    private var receivedFileOpenRequest = false
 
     private init() {
         if compressionMode == .ask {
@@ -63,6 +66,7 @@ final class AppModel: ObservableObject {
     }
 
     func beginExternalDrag(urls: [URL]) {
+        finishFirstLaunchOnboarding()
         externalDragSummary = urls.isEmpty ? .fallback : OptimizableFileSummary.fromFileHints(urls)
         externalDragActive = true
     }
@@ -135,6 +139,10 @@ final class AppModel: ObservableObject {
         lastMessage = "Ready."
     }
 
+    func noteFileOpenRequest() {
+        receivedFileOpenRequest = true
+    }
+
     func start(
         urls: [URL],
         mode: CompressionMode,
@@ -179,11 +187,39 @@ final class AppModel: ObservableObject {
     }
 
     func showExternalDropZone() {
-        externalDropZoneController?.show()
+        firstLaunchOnboardingActive = false
+        externalDropZoneController?.show(mode: .drag)
+    }
+
+    func showFirstLaunchOnboardingIfNeeded() {
+        let forceOnboarding = ProcessInfo.processInfo.environment["KOMPAKT_FORCE_FIRST_LAUNCH_ONBOARDING"] == "1"
+
+        guard forceOnboarding || (
+            !hasSeenFirstLaunchOnboarding &&
+            !receivedFileOpenRequest &&
+            !externalDragActive &&
+            !isProcessing &&
+            jobs.isEmpty &&
+            pendingAskSummary == nil
+        ) else {
+            return
+        }
+
+        firstLaunchOnboardingActive = true
+        externalDropZoneController?.show(mode: .onboarding)
     }
 
     func dismissExternalDropZone() {
+        if firstLaunchOnboardingActive {
+            finishFirstLaunchOnboarding()
+        }
         externalDropZoneController?.endDrag(didDrop: false)
+    }
+
+    func finishFirstLaunchOnboarding() {
+        guard firstLaunchOnboardingActive || !hasSeenFirstLaunchOnboarding else { return }
+        hasSeenFirstLaunchOnboarding = true
+        firstLaunchOnboardingActive = false
     }
 
     func setOpensAtLogin(_ isEnabled: Bool) {

@@ -4,6 +4,7 @@ import SwiftUI
 
 struct ExternalDropZoneView: View {
     let effectLeadingGutter: CGFloat
+    let mode: ExternalDropZoneMode
 
     @EnvironmentObject private var appModel: AppModel
     @State private var isTargeted = false
@@ -27,9 +28,9 @@ struct ExternalDropZoneView: View {
                 LinearGradient(
                     stops: [
                         .init(color: .black.opacity(0), location: 0),
-                        .init(color: .black.opacity(0), location: 0.34),
-                        .init(color: .black.opacity(0.12), location: 0.72),
-                        .init(color: .black.opacity(0.34), location: 1)
+                        .init(color: .black.opacity(0.06), location: 0.34),
+                        .init(color: .black.opacity(0.22), location: 0.72),
+                        .init(color: .black.opacity(0.48), location: 1)
                     ],
                     startPoint: .leading,
                     endPoint: .trailing
@@ -109,6 +110,8 @@ struct ExternalDropZoneView: View {
             .compositingGroup()
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
             .transition(.opacity.combined(with: .scale(scale: 0.94)))
+        } else if phase == .idle && mode == .onboarding {
+            onboardingContent
         } else {
             VStack(spacing: 16) {
                 if phase.showsPreview {
@@ -127,6 +130,48 @@ struct ExternalDropZoneView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                 .transition(.opacity.combined(with: .scale(scale: 0.98)))
         }
+    }
+
+    private var onboardingContent: some View {
+        VStack(spacing: 16) {
+            OnboardingDropMark(isTargeted: isTargeted)
+
+            VStack(spacing: 7) {
+                Text("Welcome to Kompakt")
+                    .font(.system(size: 24, weight: .semibold))
+                    .tracking(-0.72)
+                    .foregroundStyle(.white)
+
+                Group {
+                    if isTargeted {
+                        Text("Release to Kompakt")
+                            .font(.system(size: 16, weight: .medium))
+                            .tracking(-0.64)
+                            .foregroundStyle(.white)
+                    } else {
+                        ThinkingText("Drop your files here")
+                    }
+                }
+                .frame(height: 22)
+                .modifier(HoverTextMagnet(isActive: isTargeted, dragLocation: dragLocation))
+            }
+            .scaleEffect(isTargeted ? 1.03 : 1)
+
+            VStack(spacing: 8) {
+                escapeHint
+
+                Text("Next time, just drag an image\nand Kompakt will be ready.")
+                    .font(.system(size: 12, weight: .medium))
+                    .tracking(-0.2)
+                    .foregroundStyle(.white.opacity(0.54))
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.top, 12)
+        }
+        .frame(maxWidth: 310)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        .transition(.opacity.combined(with: .scale(scale: 0.98)))
     }
 
     @ViewBuilder
@@ -186,14 +231,6 @@ struct ExternalDropZoneView: View {
                     .foregroundStyle(.white.opacity(0.72))
             }
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 12)
-        .background(.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
-        .overlay {
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(.white.opacity(0.18), lineWidth: 1)
-        }
-        .shadow(color: .black.opacity(0.24), radius: 18, y: 10)
         .compositingGroup()
     }
 
@@ -237,6 +274,10 @@ struct ExternalDropZoneView: View {
     }
 
     private func loadDroppedURLs(_ urls: [URL]) {
+        if mode == .onboarding {
+            appModel.finishFirstLaunchOnboarding()
+        }
+
         fileSummary = OptimizableFileSummary.fromFileHints(urls)
         phase = .processing
         appModel.endExternalDrag(didDrop: true)
@@ -378,6 +419,21 @@ private enum DropZonePhase: Equatable {
         case .finished: 1.04
         default: isTargeted ? 1.03 : 1
         }
+    }
+}
+
+private struct OnboardingDropMark: View {
+    let isTargeted: Bool
+
+    var body: some View {
+        Image("MenuBarIcon")
+            .resizable()
+            .renderingMode(.template)
+            .scaledToFit()
+            .foregroundStyle(.white)
+            .frame(width: 42, height: 42)
+            .frame(width: 126, height: 72)
+        .allowsHitTesting(false)
     }
 }
 

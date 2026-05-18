@@ -17,6 +17,7 @@ final class KompaktUITestsLaunchTests: XCTestCase {
     func testLaunch() throws {
         let app = XCUIApplication()
         app.launchEnvironment["KOMPAKT_DISABLE_EXTERNAL_DRAG_MONITOR"] = "1"
+        app.launchEnvironment["KOMPAKT_DISABLE_FIRST_LAUNCH_ONBOARDING"] = "1"
         app.launch()
 
         let attachment = XCTAttachment(screenshot: app.screenshot())

@@ -2,11 +2,17 @@ import AppKit
 import Combine
 import SwiftUI
 
+enum ExternalDropZoneMode: Equatable {
+    case drag
+    case onboarding
+}
+
 @MainActor
 final class ExternalDropZoneController {
     private let appModel: AppModel
     private var panel: NSPanel?
     private var presentation: DropZonePresentation?
+    private var localKeyDownMonitor: Any?
     private var generation = 0
     private let visualWidth: CGFloat = 470
     private let edgeGutter: CGFloat = 96
@@ -18,19 +24,28 @@ final class ExternalDropZoneController {
         self.appModel = appModel
     }
 
-    func show() {
+    func show(mode: ExternalDropZoneMode = .drag) {
         generation += 1
+        if mode == .onboarding {
+            NSApp.activate(ignoringOtherApps: true)
+        }
+
         let screen = screenForMouse()
         let frame = visibleFrame(on: screen)
 
         if let panel {
+            presentation?.mode = mode
             panel.setFrame(frame, display: true)
             panel.orderFrontRegardless()
+            startKeyDownMonitor()
+            if mode == .onboarding {
+                panel.makeKeyAndOrderFront(nil)
+            }
             animateContent(isVisible: true)
             return
         }
 
-        let presentation = DropZonePresentation()
+        let presentation = DropZonePresentation(mode: mode)
         let effectLeadingGutter = edgeGutter
         let panel = DropZonePanel(
             contentRect: frame,
@@ -40,9 +55,10 @@ final class ExternalDropZoneController {
         )
 
         let hostingController = NSHostingController(
-            rootView: ExternalDropZonePresentationView(presentation: presentation) {
-                ExternalDropZoneView(effectLeadingGutter: effectLeadingGutter)
-            }
+            rootView: ExternalDropZonePresentationView(
+                presentation: presentation,
+                effectLeadingGutter: effectLeadingGutter
+            )
                 .environmentObject(appModel)
         )
         hostingController.view.wantsLayer = true
@@ -60,10 +76,11 @@ final class ExternalDropZoneController {
         panel.acceptsMouseMovedEvents = true
         panel.setFrame(frame, display: true)
         panel.orderFrontRegardless()
-        panel.makeKey()
+        panel.makeKeyAndOrderFront(nil)
 
         self.panel = panel
         self.presentation = presentation
+        startKeyDownMonitor()
         animateContent(isVisible: true)
     }
 
@@ -81,8 +98,29 @@ final class ExternalDropZoneController {
                 if self?.panel === panel {
                     self?.panel = nil
                     self?.presentation = nil
+                    self?.stopKeyDownMonitor()
                 }
             }
+        }
+    }
+
+    private func startKeyDownMonitor() {
+        guard localKeyDownMonitor == nil else { return }
+
+        localKeyDownMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { [weak self] event in
+            guard event.keyCode == 53 else { return event }
+
+            Task { @MainActor [weak self] in
+                self?.appModel.dismissExternalDropZone()
+            }
+            return nil
+        }
+    }
+
+    private func stopKeyDownMonitor() {
+        if let localKeyDownMonitor {
+            NSEvent.removeMonitor(localKeyDownMonitor)
+            self.localKeyDownMonitor = nil
         }
     }
 
@@ -112,18 +150,29 @@ final class ExternalDropZoneController {
             }
         }
     }
+
+    deinit {
+        MainActor.assumeIsolated {
+            stopKeyDownMonitor()
+        }
+    }
 }
 
-private final class DropZonePresentation: ObservableObject {
+final class DropZonePresentation: ObservableObject {
     @Published var isVisible = false
+    @Published var mode: ExternalDropZoneMode
+
+    init(mode: ExternalDropZoneMode) {
+        self.mode = mode
+    }
 }
 
-private struct ExternalDropZonePresentationView<Content: View>: View {
+private struct ExternalDropZonePresentationView: View {
     @ObservedObject var presentation: DropZonePresentation
-    @ViewBuilder var content: Content
+    let effectLeadingGutter: CGFloat
 
     var body: some View {
-        content
+        ExternalDropZoneView(effectLeadingGutter: effectLeadingGutter, mode: presentation.mode)
             .scaleEffect(x: presentation.isVisible ? 1 : 0.001, y: 1, anchor: .trailing)
             .opacity(presentation.isVisible ? 1 : 0)
     }

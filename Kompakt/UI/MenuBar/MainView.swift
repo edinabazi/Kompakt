@@ -795,7 +795,7 @@ private struct PopoverToggleRow: View {
                     .font(.system(size: 13, weight: .semibold))
                 Text(subtitle)
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MenuBarPopoverMetrics.settingsSubtitleColor)
                     .lineLimit(2)
             }
             Spacer()
@@ -827,7 +827,7 @@ private struct PopoverSegmentRow<Control: View>: View {
                         .font(.system(size: 13, weight: .semibold))
                     Text(subtitle)
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MenuBarPopoverMetrics.settingsSubtitleColor)
                 }
                 Spacer()
             }
@@ -883,6 +883,7 @@ enum MenuBarPopoverMetrics {
     static let height: CGFloat = 382
     static let size = NSSize(width: width, height: height)
     static let accentColor = Color(red: 0x3c / 255, green: 0x81 / 255, blue: 0x6d / 255)
+    static let settingsSubtitleColor = Color.white.opacity(0.66)
 }
 
 private struct PopoverButtonRow: View {
