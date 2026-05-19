@@ -320,7 +320,12 @@ private struct AppBackground: View {
 
 struct MenuBarPopoverView: View {
     @EnvironmentObject private var appModel: AppModel
+    let onContentSizeChange: (NSSize) -> Void
     @State private var screen: PopoverScreen = .history
+
+    init(onContentSizeChange: @escaping (NSSize) -> Void = { _ in }) {
+        self.onContentSizeChange = onContentSizeChange
+    }
 
     private var recentJobs: [CompressionJob] {
         Array(appModel.jobs.filter { $0.result != nil }.prefix(10))
@@ -332,16 +337,19 @@ struct MenuBarPopoverView: View {
             Color(nsColor: .windowBackgroundColor).opacity(0.24)
 
             VStack(spacing: 0) {
-                ZStack {
+                ZStack(alignment: .top) {
                     historyScreen
                         .offset(x: screen == .history ? 0 : -MenuBarPopoverMetrics.width)
                         .opacity(screen == .history ? 1 : 0.4)
+                        .frame(width: MenuBarPopoverMetrics.width, height: screen.contentHeight, alignment: .top)
 
                     settingsScreen
                         .offset(x: screen == .settings ? 0 : MenuBarPopoverMetrics.width)
                         .opacity(screen == .settings ? 1 : 0.4)
+                        .frame(width: MenuBarPopoverMetrics.width, height: screen.contentHeight, alignment: .top)
                 }
                 .clipped()
+                .frame(height: screen.contentHeight)
 
                 PopoverFooter(
                     status: footerStatus,
@@ -350,7 +358,7 @@ struct MenuBarPopoverView: View {
                 )
             }
         }
-        .frame(width: MenuBarPopoverMetrics.width, height: MenuBarPopoverMetrics.height)
+        .frame(width: MenuBarPopoverMetrics.width, height: screen.height)
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
@@ -358,6 +366,12 @@ struct MenuBarPopoverView: View {
         }
         .foregroundStyle(.primary)
         .animation(.smooth(duration: 0.24), value: screen)
+        .onAppear {
+            onContentSizeChange(screen.size)
+        }
+        .onChange(of: screen) { _, newScreen in
+            onContentSizeChange(newScreen.size)
+        }
     }
 
     private var historyScreen: some View {
@@ -446,61 +460,63 @@ struct MenuBarPopoverView: View {
 
             Divider()
 
-            ScrollView {
-                VStack(spacing: 0) {
-                    PopoverSegmentRow(title: "Default optimization", subtitle: "Used for new drops.") {
-                        PopoverSegmentedControl(
-                            selection: compressionModeBinding,
-                            options: visibleCompressionModes.map { ($0, $0.title) }
-                        )
-                    }
-
-                    PopoverDivider()
-
-                    PopoverSegmentRow(title: "Video size", subtitle: "When Smaller is selected.") {
-                        PopoverSegmentedControl(
-                            selection: videoModeBinding,
-                            options: VideoCompressionMode.allCases.map { ($0, $0.popoverTitle) }
-                        )
-                    }
-
-                    PopoverDivider()
-
-                    PopoverSegmentRow(title: "Output", subtitle: "Where optimized files go.") {
-                        PopoverSegmentedControl(
-                            selection: outputModeBinding,
-                            options: OutputMode.allCases.map { ($0, $0.popoverTitle) }
-                        )
-                    }
-
-                    PopoverDivider()
-
-                    PopoverToggleRow(
-                        title: "Launch at login",
-                        subtitle: "Start Kompakt when you log in.",
-                        isOn: openAtLoginBinding
-                    )
-
-                    PopoverDivider()
-
-                    PopoverToggleRow(
-                        title: "Success sound",
-                        subtitle: "Play a sound after successful optimization.",
-                        isOn: successSoundBinding
-                    )
-
-                    PopoverDivider()
-
-                    PopoverToggleRow(
-                        title: "Show ESC hint",
-                        subtitle: "Show the hide shortcut while dragging.",
-                        isOn: escapeHintBinding
+            VStack(spacing: 0) {
+                PopoverSegmentRow(title: "Default optimization", subtitle: "Used for new drops.") {
+                    PopoverSegmentedControl(
+                        selection: compressionModeBinding,
+                        options: visibleCompressionModes.map { ($0, $0.title) }
                     )
                 }
                 .padding(.horizontal, 16)
-                .padding(.vertical, 8)
+
+                PopoverDivider()
+
+                PopoverSegmentRow(title: "Video size", subtitle: "When Smaller is selected.") {
+                    PopoverSegmentedControl(
+                        selection: videoModeBinding,
+                        options: VideoCompressionMode.allCases.map { ($0, $0.popoverTitle) }
+                    )
+                }
+                .padding(.horizontal, 16)
+
+                PopoverDivider()
+
+                PopoverSegmentRow(title: "Output", subtitle: "Where optimized files go.") {
+                    PopoverSegmentedControl(
+                        selection: outputModeBinding,
+                        options: OutputMode.allCases.map { ($0, $0.popoverTitle) }
+                    )
+                }
+                .padding(.horizontal, 16)
+
+                PopoverDivider()
+
+                PopoverToggleRow(
+                    title: "Launch at login",
+                    subtitle: "Start Kompakt when you log in.",
+                    isOn: openAtLoginBinding
+                )
+                .padding(.horizontal, 16)
+
+                PopoverDivider()
+
+                PopoverToggleRow(
+                    title: "Success sound",
+                    subtitle: "Play a sound when done.",
+                    isOn: successSoundBinding
+                )
+                .padding(.horizontal, 16)
+
+                PopoverDivider()
+
+                PopoverToggleRow(
+                    title: "Show ESC hint",
+                    subtitle: "Show the hide shortcut while dragging.",
+                    isOn: escapeHintBinding
+                )
+                .padding(.horizontal, 16)
             }
-            .scrollIndicators(.never)
+            .padding(.vertical, 8)
         }
     }
 
@@ -588,6 +604,23 @@ struct MenuBarPopoverView: View {
 private enum PopoverScreen {
     case history
     case settings
+
+    var height: CGFloat {
+        switch self {
+        case .history:
+            return MenuBarPopoverMetrics.historyHeight
+        case .settings:
+            return MenuBarPopoverMetrics.settingsHeight
+        }
+    }
+
+    var size: NSSize {
+        NSSize(width: MenuBarPopoverMetrics.width, height: height)
+    }
+
+    var contentHeight: CGFloat {
+        height - MenuBarPopoverMetrics.footerHeight
+    }
 }
 
 private extension VideoCompressionMode {
@@ -794,7 +827,7 @@ private struct PopoverFooter: View {
                 .foregroundStyle(.secondary)
         }
         .padding(.horizontal, 12)
-        .frame(height: 30)
+        .frame(height: MenuBarPopoverMetrics.footerHeight)
         .background(.black.opacity(0.08))
         .overlay(alignment: .top) {
             Divider()
@@ -861,6 +894,7 @@ private struct PopoverSegmentRow<Control: View>: View {
 private struct PopoverSegmentedControl<Value: Hashable>: View {
     @Binding var selection: Value
     let options: [(value: Value, title: String)]
+    @Namespace private var activeTabAnimation
 
     var body: some View {
         HStack(spacing: 2) {
@@ -878,12 +912,17 @@ private struct PopoverSegmentedControl<Value: Hashable>: View {
                         .frame(height: 30)
                         .foregroundStyle(selection == option.value ? Color.white : Color.primary)
                         .background(
-                            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                .fill(selection == option.value ? MenuBarPopoverMetrics.accentColor : Color.clear)
+                            Group {
+                                if selection == option.value {
+                                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                        .fill(MenuBarPopoverMetrics.accentColor)
+                                        .matchedGeometryEffect(id: "active-tab", in: activeTabAnimation)
+                                }
+                            }
                         )
                         .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(PopoverSegmentButtonStyle())
                 .frame(maxWidth: .infinity)
                 .contentShape(Rectangle())
             }
@@ -894,14 +933,23 @@ private struct PopoverSegmentedControl<Value: Hashable>: View {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(Color.black.opacity(0.28))
         )
+        .animation(.smooth(duration: 0.2), value: selection)
+    }
+}
+
+private struct PopoverSegmentButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
     }
 }
 
 enum MenuBarPopoverMetrics {
     static let width: CGFloat = 320
-    static let height: CGFloat = 382
-    static let size = NSSize(width: width, height: height)
-    static let accentColor = Color(red: 0x3c / 255, green: 0x81 / 255, blue: 0x6d / 255)
+    static let historyHeight: CGFloat = 382
+    static let settingsHeight: CGFloat = 538
+    static let footerHeight: CGFloat = 30
+    static let size = NSSize(width: width, height: historyHeight)
+    static let accentColor = Color(red: 0x10 / 255, green: 0x41 / 255, blue: 0xc7 / 255)
     static let settingsSubtitleColor = Color.white.opacity(0.66)
 }
 
@@ -933,7 +981,7 @@ private struct PopoverButtonRow: View {
 private struct PopoverDivider: View {
     var body: some View {
         Rectangle()
-            .fill(Color.white.opacity(0.095))
+            .fill(Color.white.opacity(0.075))
             .frame(height: 1)
             .frame(maxWidth: .infinity)
     }

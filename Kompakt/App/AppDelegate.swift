@@ -9,6 +9,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
 
+        Task {
+            await Telemetry.shared.trackAppLaunch()
+        }
+
         let controller = MenuBarController(appModel: AppModel.shared)
         menuBarController = controller
         AppModel.shared.attachMenuBarController(controller)
