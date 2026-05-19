@@ -40,8 +40,11 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
         popover.animates = true
         popover.delegate = self
         popover.contentSize = MenuBarPopoverMetrics.size
+        let popover = popover
         popover.contentViewController = NSHostingController(
-            rootView: MenuBarPopoverView()
+            rootView: MenuBarPopoverView { size in
+                popover.contentSize = size
+            }
                 .environmentObject(appModel)
         )
     }
