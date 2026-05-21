@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 
 struct MainView: View {
@@ -320,8 +321,8 @@ private struct AppBackground: View {
 
 struct MenuBarPopoverView: View {
     @EnvironmentObject private var appModel: AppModel
+    @EnvironmentObject private var popoverState: MenuBarPopoverState
     let onContentSizeChange: (NSSize) -> Void
-    @State private var screen: PopoverScreen = .history
 
     init(onContentSizeChange: @escaping (NSSize) -> Void = { _ in }) {
         self.onContentSizeChange = onContentSizeChange
@@ -335,7 +336,7 @@ struct MenuBarPopoverView: View {
             VStack(spacing: 0) {
                 activeScreen
                 .clipped()
-                .frame(height: screen.contentHeight)
+                .frame(height: popoverState.screen.contentHeight)
 
                 PopoverFooter(
                     status: footerStatus,
@@ -344,35 +345,35 @@ struct MenuBarPopoverView: View {
                 )
             }
         }
-        .frame(width: MenuBarPopoverMetrics.width, height: screen.height)
+        .frame(width: MenuBarPopoverMetrics.width, height: popoverState.screen.height)
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .stroke(Color(nsColor: .separatorColor).opacity(0.55), lineWidth: 1)
         }
         .foregroundStyle(.primary)
-        .animation(.smooth(duration: 0.24), value: screen)
+        .animation(.smooth(duration: 0.24), value: popoverState.screen)
         .onAppear {
-            onContentSizeChange(screen.size)
+            onContentSizeChange(popoverState.screen.size)
         }
-        .onChange(of: screen) { _, newScreen in
+        .onChange(of: popoverState.screen) { _, newScreen in
             onContentSizeChange(newScreen.size)
         }
     }
 
     @ViewBuilder
     private var activeScreen: some View {
-        switch screen {
+        switch popoverState.screen {
         case .history:
             historyScreen
-                .frame(width: MenuBarPopoverMetrics.width, height: screen.contentHeight, alignment: .top)
+                .frame(width: MenuBarPopoverMetrics.width, height: popoverState.screen.contentHeight, alignment: .top)
                 .transition(.asymmetric(
                     insertion: .move(edge: .leading).combined(with: .opacity),
                     removal: .move(edge: .leading).combined(with: .opacity)
                 ))
         case .settings:
             settingsScreen
-                .frame(width: MenuBarPopoverMetrics.width, height: screen.contentHeight, alignment: .top)
+                .frame(width: MenuBarPopoverMetrics.width, height: popoverState.screen.contentHeight, alignment: .top)
                 .transition(.asymmetric(
                     insertion: .move(edge: .trailing).combined(with: .opacity),
                     removal: .move(edge: .trailing).combined(with: .opacity)
@@ -386,7 +387,7 @@ struct MenuBarPopoverView: View {
                 Image("MenuBarIcon")
                     .resizable()
                     .renderingMode(.template)
-                    .frame(width: 14, height: 14)
+                    .frame(width: 18, height: 18)
                     .foregroundStyle(appModel.isProcessing ? .mint : .secondary)
 
                 Text(popoverTitle)
@@ -396,16 +397,29 @@ struct MenuBarPopoverView: View {
                 Spacer()
 
                 Button {
-                    screen = .settings
+                    appModel.clearCompleted()
                 } label: {
-                    Image(systemName: "gearshape")
-                        .font(.system(size: 13, weight: .semibold))
-                        .frame(width: 26, height: 26)
+                    Image(systemName: "trash")
+                        .font(.system(size: 15, weight: .semibold))
+                        .frame(width: 28, height: 28)
                         .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
-                .background(.white.opacity(0.08), in: Circle())
+                .contentShape(Circle())
+                .disabled(appModel.completedJobs.isEmpty)
+                .help("Clear kompaktions")
+
+                Button {
+                    popoverState.screen = .settings
+                } label: {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 15, weight: .semibold))
+                        .frame(width: 28, height: 28)
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
                 .contentShape(Circle())
                 .help("Settings")
             }
@@ -451,7 +465,7 @@ struct MenuBarPopoverView: View {
             ZStack {
                 HStack {
                     Button {
-                        screen = .history
+                        popoverState.screen = .history
                     } label: {
                         HStack(spacing: 3) {
                             Image(systemName: "chevron.left")
@@ -619,7 +633,12 @@ struct MenuBarPopoverView: View {
     }
 }
 
-private enum PopoverScreen {
+@MainActor
+final class MenuBarPopoverState: ObservableObject {
+    @Published var screen: PopoverScreen = .history
+}
+
+enum PopoverScreen {
     case history
     case settings
 
