@@ -60,6 +60,21 @@ struct KompaktTests {
         #expect(files.count == 4)
     }
 
+    @Test func asyncCollectorMatchesSynchronousCollector() async throws {
+        let directory = try temporaryDirectory()
+        let nested = directory.appendingPathComponent("Nested", isDirectory: true)
+        try FileManager.default.createDirectory(at: nested, withIntermediateDirectories: true)
+
+        _ = try write([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A], named: "a.png", in: directory)
+        _ = try write([0xFF, 0xD8, 0xFF], named: "b.jpg", in: nested)
+        _ = try write([0x00], named: "notes.txt", in: nested)
+
+        let syncFiles = Set(FileCollector.collectFiles(from: [directory]))
+        let asyncFiles = await Set(FileCollector.collectFilesAsync(from: [directory]))
+
+        #expect(asyncFiles == syncFiles)
+    }
+
     @Test func videoSummaryAndModesAreExplicit() throws {
         let directory = try temporaryDirectory()
         let movie = try write([0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70], named: "clip.mp4", in: directory)
@@ -163,6 +178,43 @@ struct KompaktTests {
 @Suite(.serialized)
 @MainActor
 struct AppModelRollbackTests {
+    @Test func cachedJobSummaryUpdatesWhenJobsAreReplaced() throws {
+        let directory = try temporaryDirectory()
+        let first = try write([0x01], named: "first.png", in: directory)
+        let second = try write([0x02], named: "second.png", in: directory)
+        var finished = completedJob(url: first, outputURL: first, backupURL: nil, outputMode: .createCopies)
+        var failed = CompressionJob(batchID: UUID(), url: second, mode: .smaller, videoMode: nil, outputMode: .createCopies)
+        failed.status = .failed("Failed")
+
+        let appModel = AppModel.shared
+        appModel.replaceJobsForTesting([failed, finished])
+        finished = try #require(appModel.jobs.last)
+
+        #expect(appModel.latestJob?.id == failed.id)
+        #expect(appModel.completedJobs.map(\.id) == [failed.id, finished.id])
+        #expect(appModel.recentCompletedJobs.map(\.id) == [finished.id])
+        #expect(appModel.totalBytesSaved == 1)
+        #expect(appModel.progress == 1)
+    }
+
+    @Test func cachedJobSummaryUpdatesWhenCompletedJobsAreCleared() throws {
+        let directory = try temporaryDirectory()
+        let finishedURL = try write([0x01], named: "finished.png", in: directory)
+        let queuedURL = try write([0x02], named: "queued.png", in: directory)
+        let finished = completedJob(url: finishedURL, outputURL: finishedURL, backupURL: nil, outputMode: .createCopies)
+        let queued = CompressionJob(batchID: UUID(), url: queuedURL, mode: .smaller, videoMode: nil, outputMode: .createCopies)
+
+        let appModel = AppModel.shared
+        appModel.replaceJobsForTesting([queued, finished])
+        appModel.clearCompleted()
+
+        #expect(appModel.jobs.map(\.id) == [queued.id])
+        #expect(appModel.completedJobs.isEmpty)
+        #expect(appModel.recentCompletedJobs.isEmpty)
+        #expect(appModel.totalBytesSaved == 0)
+        #expect(appModel.progress == 0)
+    }
+
     @Test func createCopiesRollbackDeletesOnlyOutputCopy() throws {
         let directory = try temporaryDirectory()
         let original = try write([0x01], named: "original.png", in: directory)

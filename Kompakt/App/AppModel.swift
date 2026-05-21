@@ -16,11 +16,11 @@ final class AppModel: ObservableObject {
 
     @Published private(set) var jobs: [CompressionJob] = []
     @Published private(set) var isProcessing = false
-    @Published private(set) var progress: Double = 0
     @Published private(set) var lastMessage = "Drop files to Kompakt."
     @Published private(set) var pendingAskSummary: OptimizableFileSummary?
     @Published private(set) var externalDragActive = false
     @Published private(set) var externalDragSummary = OptimizableFileSummary.fallback
+    @Published private var jobSummary = JobSummary()
 
     private let queue = CompressionQueue()
     private let successSoundPlayer = SuccessSoundPlayer()
@@ -36,16 +36,28 @@ final class AppModel: ObservableObject {
         }
     }
 
+    var opensAtLogin: Bool {
+        SMAppService.mainApp.status == .enabled
+    }
+
     var completedJobs: [CompressionJob] {
-        jobs.filter { $0.status.isFinished }
+        jobSummary.completedJobs
     }
 
     var totalBytesSaved: Int64 {
-        jobs.compactMap(\.result?.bytesSaved).reduce(0, +)
+        jobSummary.totalBytesSaved
     }
 
-    var opensAtLogin: Bool {
-        SMAppService.mainApp.status == .enabled
+    var latestJob: CompressionJob? {
+        jobSummary.latestJob
+    }
+
+    var recentCompletedJobs: [CompressionJob] {
+        jobSummary.recentCompletedJobs
+    }
+
+    var progress: Double {
+        jobSummary.progress
     }
 
     enum RevertError: LocalizedError {
@@ -86,35 +98,26 @@ final class AppModel: ObservableObject {
     }
 
     func handleDropped(urls: [URL]) {
-        let fileURLs = FileCollector.collectFiles(from: urls)
-
-        guard !fileURLs.isEmpty else {
-            lastMessage = "No supported files found."
-            return
-        }
-
-        switch compressionMode {
-        case .ask:
-            pendingAskURLs = fileURLs
-            pendingAskSummary = OptimizableFileSummary.fromCollectedFiles(fileURLs)
-            lastMessage = "Choose optimization for \(fileURLs.count) file\(fileURLs.count == 1 ? "" : "s")."
-        case .lossless, .smaller:
-            start(urls: fileURLs, mode: compressionMode)
+        Task {
+            let fileURLs = await FileCollector.collectFilesAsync(from: urls)
+            handleCollectedDrop(fileURLs)
         }
     }
 
     func handleExternalDropZoneDrop(urls: [URL], onFinished: ((CompressionBatchSummary?) -> Void)? = nil) {
-        let fileURLs = FileCollector.collectFiles(from: urls)
+        Task {
+            let fileURLs = await FileCollector.collectFilesAsync(from: urls)
 
-        guard !fileURLs.isEmpty else {
-            lastMessage = "No supported files found."
-            onFinished?(nil)
-            return
+            guard !fileURLs.isEmpty else {
+                lastMessage = "No supported files found."
+                onFinished?(nil)
+                return
+            }
+
+            pendingAskURLs = []
+            pendingAskSummary = nil
+            start(urls: fileURLs, mode: compressionMode, onFinished: onFinished)
         }
-
-        pendingAskURLs = []
-        pendingAskSummary = nil
-        start(urls: fileURLs, mode: compressionMode, onFinished: onFinished)
     }
 
     func choosePendingAskMode(_ mode: CompressionMode) {
@@ -159,12 +162,13 @@ final class AppModel: ObservableObject {
         }
         jobs.insert(contentsOf: newJobs, at: 0)
         lastMessage = "Queued \(newJobs.count) file\(newJobs.count == 1 ? "" : "s")."
+        refreshJobSummary()
         run(jobs: newJobs, onFinished: onFinished)
     }
 
     func clearCompleted() {
         jobs.removeAll { $0.status.isFinished }
-        updateProgress()
+        refreshJobSummary()
     }
 
     func reveal(_ job: CompressionJob) {
@@ -182,7 +186,7 @@ final class AppModel: ObservableObject {
         do {
             try revertJob(at: index)
             lastMessage = "Reverted \(job.displayName)."
-            updateProgress()
+            refreshJobSummary()
         } catch {
             lastMessage = "Revert failed: \(error.localizedDescription)"
         }
@@ -272,6 +276,22 @@ final class AppModel: ObservableObject {
         jobs[index].status = .reverted
     }
 
+    private func handleCollectedDrop(_ fileURLs: [URL]) {
+        guard !fileURLs.isEmpty else {
+            lastMessage = "No supported files found."
+            return
+        }
+
+        switch compressionMode {
+        case .ask:
+            pendingAskURLs = fileURLs
+            pendingAskSummary = OptimizableFileSummary.fromCollectedFiles(fileURLs)
+            lastMessage = "Choose optimization for \(fileURLs.count) file\(fileURLs.count == 1 ? "" : "s")."
+        case .lossless, .smaller:
+            start(urls: fileURLs, mode: compressionMode)
+        }
+    }
+
     private func run(jobs queuedJobs: [CompressionJob], onFinished: ((CompressionBatchSummary?) -> Void)? = nil) {
         isProcessing = true
         let queuedJobIDs = Set(queuedJobs.map(\.id))
@@ -285,7 +305,7 @@ final class AppModel: ObservableObject {
 
             await MainActor.run {
                 self.isProcessing = self.jobs.contains { $0.status == .running || $0.status == .queued }
-                self.updateProgress()
+                self.refreshJobSummary()
                 if !self.isProcessing {
                     self.lastMessage = self.summaryMessage()
                 }
@@ -303,17 +323,35 @@ final class AppModel: ObservableObject {
         guard let index = jobs.firstIndex(where: { $0.id == job.id }) else { return }
         jobs[index] = job
         lastMessage = job.status.message
-        updateProgress()
+        refreshJobSummary()
     }
 
-    private func updateProgress() {
-        guard !jobs.isEmpty else {
-            progress = 0
-            return
+    private func refreshJobSummary() {
+        var completedJobs: [CompressionJob] = []
+        var recentCompletedJobs: [CompressionJob] = []
+        var totalBytesSaved: Int64 = 0
+
+        for job in jobs {
+            if job.status.isFinished {
+                completedJobs.append(job)
+            }
+
+            if let result = job.result {
+                totalBytesSaved += result.bytesSaved
+
+                if recentCompletedJobs.count < 10 {
+                    recentCompletedJobs.append(job)
+                }
+            }
         }
 
-        let finished = jobs.filter { $0.status.isFinished }.count
-        progress = Double(finished) / Double(jobs.count)
+        jobSummary = JobSummary(
+            completedJobs: completedJobs,
+            totalBytesSaved: totalBytesSaved,
+            latestJob: jobs.first,
+            recentCompletedJobs: recentCompletedJobs,
+            progress: jobs.isEmpty ? 0 : Double(completedJobs.count) / Double(jobs.count)
+        )
     }
 
     private func summaryMessage() -> String {
@@ -327,7 +365,15 @@ final class AppModel: ObservableObject {
 extension AppModel {
     func replaceJobsForTesting(_ jobs: [CompressionJob]) {
         self.jobs = jobs
-        updateProgress()
+        refreshJobSummary()
     }
 }
 #endif
+
+private struct JobSummary {
+    var completedJobs: [CompressionJob] = []
+    var totalBytesSaved: Int64 = 0
+    var latestJob: CompressionJob?
+    var recentCompletedJobs: [CompressionJob] = []
+    var progress: Double = 0
+}

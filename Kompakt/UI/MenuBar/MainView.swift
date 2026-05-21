@@ -195,7 +195,7 @@ struct MainView: View {
                 .help("Clear completed")
             }
 
-            if let latest = appModel.jobs.first {
+            if let latest = appModel.latestJob {
                 HStack(spacing: 10) {
                     Image(
                         systemName: latest.status.isFinished
@@ -327,10 +327,6 @@ struct MenuBarPopoverView: View {
         self.onContentSizeChange = onContentSizeChange
     }
 
-    private var recentJobs: [CompressionJob] {
-        Array(appModel.jobs.filter { $0.result != nil }.prefix(10))
-    }
-
     var body: some View {
         ZStack {
             VisualEffectBackground(material: .hudWindow, blendingMode: .behindWindow)
@@ -409,15 +405,27 @@ struct MenuBarPopoverView: View {
             Divider()
 
             if let pendingAskSummary = appModel.pendingAskSummary {
-                PopoverPendingAsk(summary: pendingAskSummary)
-            } else if recentJobs.isEmpty {
+                PopoverPendingAsk(
+                    summary: pendingAskSummary,
+                    cancelAction: { appModel.cancelPendingAsk() },
+                    chooseModeAction: { appModel.choosePendingAskMode($0) },
+                    chooseVideoModeAction: { appModel.choosePendingVideoMode($0) }
+                )
+            } else if appModel.recentCompletedJobs.isEmpty {
                 PopoverEmptyHistory()
             } else {
+                let recentJobs = appModel.recentCompletedJobs
+                let lastJobID = recentJobs.last?.id
+
                 ScrollView {
                     LazyVStack(spacing: 0) {
                         ForEach(recentJobs) { job in
-                            PopoverHistoryRow(job: job)
-                            if job.id != recentJobs.last?.id {
+                            PopoverHistoryRow(
+                                job: job,
+                                revealAction: { appModel.reveal(job) },
+                                revertAction: { appModel.revert(job: job) }
+                            )
+                            if job.id != lastJobID {
                                 Divider().padding(.leading, 52)
                             }
                         }
@@ -648,8 +656,9 @@ private extension OutputMode {
 }
 
 private struct PopoverHistoryRow: View {
-    @EnvironmentObject private var appModel: AppModel
     let job: CompressionJob
+    let revealAction: () -> Void
+    let revertAction: () -> Void
 
     var body: some View {
         HStack(spacing: 10) {
@@ -670,9 +679,7 @@ private struct PopoverHistoryRow: View {
 
             Spacer(minLength: 8)
 
-            Button {
-                appModel.reveal(job)
-            } label: {
+            Button(action: revealAction) {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 11, weight: .semibold))
                     .frame(width: 22, height: 22)
@@ -682,9 +689,7 @@ private struct PopoverHistoryRow: View {
             .background(.white.opacity(0.08), in: Circle())
             .help("Reveal in Finder")
 
-            Button {
-                appModel.revert(job: job)
-            } label: {
+            Button(action: revertAction) {
                 Image(systemName: "arrow.uturn.backward")
                     .font(.system(size: 11, weight: .semibold))
                     .frame(width: 22, height: 22)
@@ -706,8 +711,10 @@ private struct PopoverHistoryRow: View {
 }
 
 private struct PopoverPendingAsk: View {
-    @EnvironmentObject private var appModel: AppModel
     let summary: OptimizableFileSummary
+    let cancelAction: () -> Void
+    let chooseModeAction: (CompressionMode) -> Void
+    let chooseVideoModeAction: (VideoCompressionMode) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -722,9 +729,7 @@ private struct PopoverPendingAsk: View {
 
                 Spacer()
 
-                Button {
-                    appModel.cancelPendingAsk()
-                } label: {
+                Button(action: cancelAction) {
                     Image(systemName: "xmark")
                         .font(.system(size: 11, weight: .bold))
                         .frame(width: 22, height: 22)
@@ -737,15 +742,15 @@ private struct PopoverPendingAsk: View {
             if summary.kind == .video {
                 ForEach(VideoCompressionMode.allCases) { mode in
                     PopoverChoiceButton(title: mode.title, subtitle: mode.subtitle) {
-                        appModel.choosePendingVideoMode(mode)
+                        chooseVideoModeAction(mode)
                     }
                 }
             } else {
                 PopoverChoiceButton(title: "Lossless", subtitle: "Pixels stay intact.") {
-                    appModel.choosePendingAskMode(.lossless)
+                    chooseModeAction(.lossless)
                 }
                 PopoverChoiceButton(title: "Smaller", subtitle: "Balanced lossy optimization.") {
-                    appModel.choosePendingAskMode(.smaller)
+                    chooseModeAction(.smaller)
                 }
             }
 

@@ -1,12 +1,13 @@
 import AppKit
 import AVFoundation
+import ImageIO
 import SwiftUI
 
 struct ExternalDropZoneView: View {
     let effectLeadingGutter: CGFloat
     let mode: ExternalDropZoneMode
 
-    @EnvironmentObject private var appModel: AppModel
+    @AppStorage("showEscapeHint") private var showEscapeHint = true
     @State private var isTargeted = false
     @State private var dragLocation: CGPoint?
     @State private var phase: DropZonePhase = .idle
@@ -15,6 +16,10 @@ struct ExternalDropZoneView: View {
     @State private var previewTotalCount = 0
     @State private var fileSummary = OptimizableFileSummary.fallback
     @State private var completionSummary: CompressionBatchSummary?
+
+    private var appModel: AppModel {
+        AppModel.shared
+    }
 
     var body: some View {
         ZStack {
@@ -37,8 +42,10 @@ struct ExternalDropZoneView: View {
                 )
                 .ignoresSafeArea()
 
-                HoverColorBloomView(isActive: isTargeted && phase.acceptsDrops)
-                    .ignoresSafeArea()
+                if isTargeted && phase.acceptsDrops {
+                    HoverColorBloomView()
+                        .ignoresSafeArea()
+                }
             }
 
             centerContent
@@ -87,7 +94,7 @@ struct ExternalDropZoneView: View {
                 }
                 .padding(.top, 4)
 
-                if appModel.showEscapeHint {
+                if showEscapeHint {
                     escapeHint
                         .padding(.top, 2)
                 }
@@ -103,7 +110,7 @@ struct ExternalDropZoneView: View {
 
                 completionBadge
 
-                if appModel.showEscapeHint {
+                if showEscapeHint {
                     escapeHint
                 }
             }
@@ -123,7 +130,7 @@ struct ExternalDropZoneView: View {
                     .blur(radius: phase.textBlur)
                     .modifier(HoverTextMagnet(isActive: isTargeted && phase.acceptsDrops, dragLocation: dragLocation))
 
-                if appModel.showEscapeHint {
+                if showEscapeHint {
                     escapeHint
                 }
             }
@@ -283,9 +290,7 @@ struct ExternalDropZoneView: View {
         appModel.endExternalDrag(didDrop: true)
 
         Task {
-            let fileURLs = await Task.detached(priority: .userInitiated) {
-                FileCollector.collectFiles(from: urls)
-            }.value
+            let fileURLs = await FileCollector.collectFilesAsync(from: urls)
 
             await MainActor.run {
                 finishLoadingDroppedFiles(fileURLs)
@@ -589,8 +594,25 @@ private enum PreviewLoader {
 
     static func load(url: URL, size: CGFloat) -> Preview {
         let isVideo = FileFormatDetector.detect(url)?.isVideo == true
-        let image = NSImage(contentsOf: url) ?? videoPreviewImage(for: url, size: size)
+        let image = isVideo ? videoPreviewImage(for: url, size: size) : imagePreview(for: url, size: size)
         return Preview(image: image, isVideo: isVideo)
+    }
+
+    private static func imagePreview(for url: URL, size: CGFloat) -> NSImage? {
+        let maxPixelSize = max(1, Int((size * 3).rounded()))
+        let options: [CFString: Any] = [
+            kCGImageSourceShouldCache: false,
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
+            kCGImageSourceCreateThumbnailWithTransform: true
+        ]
+
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary),
+              let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
+            return nil
+        }
+
+        return NSImage(cgImage: image, size: CGSize(width: image.width, height: image.height))
     }
 
     private static func videoPreviewImage(for url: URL, size: CGFloat) -> NSImage? {
@@ -636,6 +658,8 @@ private final class DropReceiverNSView: NSView {
     var onDragLocationChanged: ((CGPoint?) -> Void)?
     var onDrop: (([URL]) -> Void)?
     private var isTargeted = false
+    private var lastDragLocation: CGPoint?
+    private let dragLocationThreshold: CGFloat = 0.02
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -652,20 +676,20 @@ private final class DropReceiverNSView: NSView {
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
         let acceptsDrop = acceptsFileURLs(from: sender)
         updateTargetState(acceptsDrop)
-        onDragLocationChanged?(acceptsDrop ? dragLocation(from: sender) : nil)
+        updateDragLocation(acceptsDrop ? dragLocation(from: sender) : nil, force: true)
         return acceptsDrop ? .copy : []
     }
 
     override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
         let acceptsDrop = acceptsFileURLs(from: sender)
         updateTargetState(acceptsDrop)
-        onDragLocationChanged?(acceptsDrop ? dragLocation(from: sender) : nil)
+        updateDragLocation(acceptsDrop ? dragLocation(from: sender) : nil)
         return acceptsDrop ? .copy : []
     }
 
     override func draggingExited(_ sender: NSDraggingInfo?) {
         updateTargetState(false)
-        onDragLocationChanged?(nil)
+        updateDragLocation(nil, force: true)
     }
 
     override func prepareForDragOperation(_ sender: NSDraggingInfo) -> Bool {
@@ -675,7 +699,7 @@ private final class DropReceiverNSView: NSView {
     override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
         let urls = supportedURLs(from: sender)
         updateTargetState(false)
-        onDragLocationChanged?(nil)
+        updateDragLocation(nil, force: true)
 
         guard !urls.isEmpty else { return false }
         onDrop?(urls)
@@ -684,7 +708,7 @@ private final class DropReceiverNSView: NSView {
 
     override func concludeDragOperation(_ sender: NSDraggingInfo?) {
         updateTargetState(false)
-        onDragLocationChanged?(nil)
+        updateDragLocation(nil, force: true)
     }
 
     private func updateTargetState(_ isTargeted: Bool) {
@@ -714,10 +738,28 @@ private final class DropReceiverNSView: NSView {
             y: (((bounds.height - location.y) / height) - 0.5) * 2
         )
     }
+
+    private func updateDragLocation(_ location: CGPoint?, force: Bool = false) {
+        guard force || shouldPublish(location) else { return }
+        lastDragLocation = location
+        onDragLocationChanged?(location)
+    }
+
+    private func shouldPublish(_ location: CGPoint?) -> Bool {
+        guard let location else {
+            return lastDragLocation != nil
+        }
+
+        guard let lastDragLocation else {
+            return true
+        }
+
+        return abs(location.x - lastDragLocation.x) >= dragLocationThreshold
+            || abs(location.y - lastDragLocation.y) >= dragLocationThreshold
+    }
 }
 
 private struct HoverColorBloomView: View {
-    let isActive: Bool
     @State private var revealProgress = 0.0
 
     var body: some View {
@@ -766,11 +808,11 @@ private struct HoverColorBloomView: View {
                     RippleRing(progress: revealProgress)
                         .frame(width: proxy.size.height * 1.55, height: proxy.size.height * 1.55)
                         .position(x: proxy.size.width * 0.94, y: proxy.size.height * (0.5 + 0.04 * wave))
-                        .opacity(isActive ? max(0, 1 - revealProgress) * 0.72 : 0)
+                        .opacity(max(0, 1 - revealProgress) * 0.72)
                 }
-                .opacity(isActive ? 1 : 0)
+                .opacity(1)
                 .scaleEffect(0.98 + 0.04 * revealProgress, anchor: .trailing)
-                .blur(radius: isActive ? 12 : 24)
+                .blur(radius: 12)
                 .blendMode(.screen)
                 .mask {
                     RadialGradient(
@@ -801,11 +843,8 @@ private struct HoverColorBloomView: View {
             }
         }
         .onAppear {
-            revealProgress = isActive ? 1 : 0
-        }
-        .onChange(of: isActive) { _, newValue in
             withAnimation(.interpolatingSpring(stiffness: 112, damping: 13)) {
-                revealProgress = newValue ? 1 : 0
+                revealProgress = 1
             }
         }
         .allowsHitTesting(false)

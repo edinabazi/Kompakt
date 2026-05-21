@@ -88,16 +88,40 @@ struct OptimizerCommandRunner {
         process.arguments = command.arguments(input, output, mode)
 
         let pipe = Pipe()
+        pipe.fileHandleForReading.readabilityHandler = { handle in
+            _ = handle.availableData
+        }
         process.standardOutput = pipe
         process.standardError = pipe
+        defer {
+            pipe.fileHandleForReading.readabilityHandler = nil
+        }
 
-        try process.run()
-        process.waitUntilExit()
+        try await runAndWaitForProcessTermination(process)
 
         guard process.terminationStatus == 0, FileManager.default.fileExists(atPath: output.path) else {
             return nil
         }
 
         return output
+    }
+
+    private func runAndWaitForProcessTermination(_ process: Process) async throws {
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                process.terminationHandler = { process in
+                    process.terminationHandler = nil
+                    continuation.resume()
+                }
+                do {
+                    try process.run()
+                } catch {
+                    process.terminationHandler = nil
+                    continuation.resume(throwing: error)
+                }
+            }
+        } onCancel: {
+            process.terminate()
+        }
     }
 }

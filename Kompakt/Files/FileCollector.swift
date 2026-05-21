@@ -23,6 +23,12 @@ enum FileCollector {
         urls.flatMap(collectFiles(from:))
     }
 
+    static func collectFilesAsync(from urls: [URL]) async -> [URL] {
+        await Task.detached(priority: .userInitiated) {
+            collectFiles(from: urls)
+        }.value
+    }
+
     private static func collectFiles(from url: URL) -> [URL] {
         var isDirectory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) else {
