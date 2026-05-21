@@ -333,17 +333,7 @@ struct MenuBarPopoverView: View {
             Color(nsColor: .windowBackgroundColor).opacity(0.24)
 
             VStack(spacing: 0) {
-                ZStack(alignment: .top) {
-                    historyScreen
-                        .offset(x: screen == .history ? 0 : -MenuBarPopoverMetrics.width)
-                        .opacity(screen == .history ? 1 : 0.4)
-                        .frame(width: MenuBarPopoverMetrics.width, height: screen.contentHeight, alignment: .top)
-
-                    settingsScreen
-                        .offset(x: screen == .settings ? 0 : MenuBarPopoverMetrics.width)
-                        .opacity(screen == .settings ? 1 : 0.4)
-                        .frame(width: MenuBarPopoverMetrics.width, height: screen.contentHeight, alignment: .top)
-                }
+                activeScreen
                 .clipped()
                 .frame(height: screen.contentHeight)
 
@@ -367,6 +357,26 @@ struct MenuBarPopoverView: View {
         }
         .onChange(of: screen) { _, newScreen in
             onContentSizeChange(newScreen.size)
+        }
+    }
+
+    @ViewBuilder
+    private var activeScreen: some View {
+        switch screen {
+        case .history:
+            historyScreen
+                .frame(width: MenuBarPopoverMetrics.width, height: screen.contentHeight, alignment: .top)
+                .transition(.asymmetric(
+                    insertion: .move(edge: .leading).combined(with: .opacity),
+                    removal: .move(edge: .leading).combined(with: .opacity)
+                ))
+        case .settings:
+            settingsScreen
+                .frame(width: MenuBarPopoverMetrics.width, height: screen.contentHeight, alignment: .top)
+                .transition(.asymmetric(
+                    insertion: .move(edge: .trailing).combined(with: .opacity),
+                    removal: .move(edge: .trailing).combined(with: .opacity)
+                ))
         }
     }
 
@@ -662,7 +672,7 @@ private struct PopoverHistoryRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(nsImage: NSWorkspace.shared.icon(forFile: job.url.path))
+            Image(nsImage: FileIconCache.shared.icon(for: job.url))
                 .resizable()
                 .frame(width: 24, height: 24)
 

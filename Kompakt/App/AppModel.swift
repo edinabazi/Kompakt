@@ -82,7 +82,7 @@ final class AppModel: ObservableObject {
 
     func beginExternalDrag(urls: [URL]) {
         finishFirstLaunchOnboarding()
-        externalDragSummary = urls.isEmpty ? .fallback : OptimizableFileSummary.fromFileHints(urls)
+        externalDragSummary = urls.isEmpty ? .fallback : OptimizableFileSummary.fromFileHintExtensions(urls)
         externalDragActive = true
     }
 

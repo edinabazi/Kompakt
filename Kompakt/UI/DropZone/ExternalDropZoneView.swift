@@ -492,45 +492,47 @@ private struct FilePreviewStack: View {
 
 private struct ThinkingText: View {
     let title: String
+    @State private var shimmerOffset = -0.58
 
     init(_ title: String) {
         self.title = title
     }
 
     var body: some View {
-        TimelineView(.animation) { timeline in
-            let time = timeline.date.timeIntervalSinceReferenceDate
-            let progress = time.truncatingRemainder(dividingBy: 1.65) / 1.65
+        ZStack {
+            Text(title)
+                .font(.system(size: 16, weight: .medium))
+                .tracking(-0.64)
+                .foregroundStyle(.white.opacity(0.46))
 
-            ZStack {
-                Text(title)
-                    .font(.system(size: 16, weight: .medium))
-                    .tracking(-0.64)
-                    .foregroundStyle(.white.opacity(0.46))
-
-                Text(title)
-                    .font(.system(size: 16, weight: .medium))
-                    .tracking(-0.64)
-                    .foregroundStyle(.white.opacity(0.96))
-                    .mask {
-                        GeometryReader { proxy in
-                            LinearGradient(
-                                stops: [
-                                    .init(color: .clear, location: 0),
-                                    .init(color: .white.opacity(0.18), location: 0.32),
-                                    .init(color: .white, location: 0.5),
-                                    .init(color: .white.opacity(0.18), location: 0.68),
-                                    .init(color: .clear, location: 1)
-                                ],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                            .frame(width: max(42, proxy.size.width * 0.52), height: proxy.size.height)
-                            .offset(x: -proxy.size.width * 0.58 + CGFloat(progress) * proxy.size.width * 1.68)
-                        }
+            Text(title)
+                .font(.system(size: 16, weight: .medium))
+                .tracking(-0.64)
+                .foregroundStyle(.white.opacity(0.96))
+                .mask {
+                    GeometryReader { proxy in
+                        LinearGradient(
+                            stops: [
+                                .init(color: .clear, location: 0),
+                                .init(color: .white.opacity(0.18), location: 0.32),
+                                .init(color: .white, location: 0.5),
+                                .init(color: .white.opacity(0.18), location: 0.68),
+                                .init(color: .clear, location: 1)
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                        .frame(width: max(42, proxy.size.width * 0.52), height: proxy.size.height)
+                        .offset(x: proxy.size.width * shimmerOffset)
                     }
+                }
+        }
+        .fixedSize()
+        .onAppear {
+            shimmerOffset = -0.58
+            withAnimation(.linear(duration: 1.65).repeatForever(autoreverses: false)) {
+                shimmerOffset = 1.1
             }
-            .fixedSize()
         }
         .allowsHitTesting(false)
     }
@@ -544,7 +546,7 @@ private struct PreviewCard: View {
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
-            Image(nsImage: previewImage ?? NSWorkspace.shared.icon(forFile: url.path))
+            Image(nsImage: previewImage ?? FileIconCache.shared.icon(for: url))
                 .resizable()
                 .scaledToFill()
                 .frame(width: size, height: size)
@@ -761,90 +763,88 @@ private final class DropReceiverNSView: NSView {
 
 private struct HoverColorBloomView: View {
     @State private var revealProgress = 0.0
+    @State private var pulse = false
 
     var body: some View {
         GeometryReader { proxy in
-            TimelineView(.animation) { timeline in
-                let time = timeline.date.timeIntervalSinceReferenceDate
-                let wave = 0.5 + 0.5 * sin(time * 2.2)
-                let drift = 0.5 + 0.5 * sin(time * 1.35 + 1.1)
-                let ripple = max(proxy.size.width, proxy.size.height) * (0.16 + 1.25 * revealProgress)
+            let maxDimension = max(proxy.size.width, proxy.size.height)
+            let ripple = maxDimension * (0.16 + 1.25 * revealProgress)
 
-                ZStack {
-                    LinearGradient(
-                        stops: [
-                            .init(color: .white.opacity(0.0), location: 0),
-                            .init(color: .white.opacity(0.0), location: 0.34),
-                            .init(color: .white.opacity(0.03), location: 0.58),
-                            .init(color: .white.opacity(0.08), location: 0.78),
-                            .init(color: .white.opacity(0.14), location: 1)
-                        ],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
+            ZStack {
+                LinearGradient(
+                    stops: [
+                        .init(color: .white.opacity(0.0), location: 0),
+                        .init(color: .white.opacity(0.0), location: 0.34),
+                        .init(color: .white.opacity(0.03), location: 0.58),
+                        .init(color: .white.opacity(0.08), location: 0.78),
+                        .init(color: .white.opacity(0.14), location: 1)
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
 
-                    RadialGradient(
-                        colors: [
-                            .white.opacity(0.10),
-                            .white.opacity(0.05),
-                            .clear
-                        ],
-                        center: UnitPoint(x: 0.74 + 0.06 * wave, y: 0.42 + 0.08 * drift),
-                        startRadius: 20,
-                        endRadius: max(proxy.size.width, proxy.size.height) * 0.54
-                    )
+                RadialGradient(
+                    colors: [
+                        .white.opacity(0.10),
+                        .white.opacity(0.05),
+                        .clear
+                    ],
+                    center: UnitPoint(x: pulse ? 0.80 : 0.74, y: pulse ? 0.50 : 0.42),
+                    startRadius: 20,
+                    endRadius: maxDimension * 0.54
+                )
 
-                    RadialGradient(
-                        colors: [
-                            .white.opacity(0.08),
-                            .white.opacity(0.04),
-                            .clear
-                        ],
-                        center: UnitPoint(x: 0.93 - 0.05 * drift, y: 0.72 - 0.06 * wave),
-                        startRadius: 8,
-                        endRadius: max(proxy.size.width, proxy.size.height) * 0.42
-                    )
+                RadialGradient(
+                    colors: [
+                        .white.opacity(0.08),
+                        .white.opacity(0.04),
+                        .clear
+                    ],
+                    center: UnitPoint(x: pulse ? 0.88 : 0.93, y: pulse ? 0.66 : 0.72),
+                    startRadius: 8,
+                    endRadius: maxDimension * 0.42
+                )
 
-                    RippleRing(progress: revealProgress)
-                        .frame(width: proxy.size.height * 1.55, height: proxy.size.height * 1.55)
-                        .position(x: proxy.size.width * 0.94, y: proxy.size.height * (0.5 + 0.04 * wave))
-                        .opacity(max(0, 1 - revealProgress) * 0.72)
-                }
-                .opacity(1)
-                .scaleEffect(0.98 + 0.04 * revealProgress, anchor: .trailing)
-                .blur(radius: 12)
-                .blendMode(.screen)
-                .mask {
-                    RadialGradient(
-                        stops: [
-                            .init(color: .white, location: 0),
-                            .init(color: .white, location: 0.72),
-                            .init(color: .white.opacity(0), location: 1)
-                        ],
-                        center: UnitPoint(x: 0.96, y: 0.5),
-                        startRadius: max(0, ripple * 0.08),
-                        endRadius: ripple
-                    )
-                    .blur(radius: 18)
-                }
-                .mask {
-                    LinearGradient(
-                        stops: [
-                            .init(color: .clear, location: 0),
-                            .init(color: .clear, location: 0.34),
-                            .init(color: .white.opacity(0.34), location: 0.62),
-                            .init(color: .white, location: 1)
-                        ],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                }
-                .animation(.interpolatingSpring(stiffness: 112, damping: 13), value: revealProgress)
+                RippleRing(progress: revealProgress)
+                    .frame(width: proxy.size.height * 1.55, height: proxy.size.height * 1.55)
+                    .position(x: proxy.size.width * 0.94, y: proxy.size.height * (pulse ? 0.54 : 0.5))
+                    .opacity(max(0, 1 - revealProgress) * 0.72)
+            }
+            .opacity(1)
+            .scaleEffect(0.98 + 0.04 * revealProgress, anchor: .trailing)
+            .blur(radius: 8)
+            .blendMode(.screen)
+            .mask {
+                RadialGradient(
+                    stops: [
+                        .init(color: .white, location: 0),
+                        .init(color: .white, location: 0.72),
+                        .init(color: .white.opacity(0), location: 1)
+                    ],
+                    center: UnitPoint(x: 0.96, y: 0.5),
+                    startRadius: max(0, ripple * 0.08),
+                    endRadius: ripple
+                )
+            }
+            .mask {
+                LinearGradient(
+                    stops: [
+                        .init(color: .clear, location: 0),
+                        .init(color: .clear, location: 0.34),
+                        .init(color: .white.opacity(0.34), location: 0.62),
+                        .init(color: .white, location: 1)
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
             }
         }
         .onAppear {
             withAnimation(.interpolatingSpring(stiffness: 112, damping: 13)) {
                 revealProgress = 1
+            }
+            withAnimation(.easeInOut(duration: 1.8)) {
+                pulse = true
             }
         }
         .allowsHitTesting(false)

@@ -87,6 +87,28 @@ struct KompaktTests {
         #expect(VideoCompressionMode.downscale720.maxHeight == 720)
     }
 
+    @Test func fileHintExtensionSummaryClassifiesWithoutReadingBytes() throws {
+        let directory = try temporaryDirectory()
+        let image = try write([0x00], named: "image.png", in: directory)
+        let video = try write([0x00], named: "video.mov", in: directory)
+        let unsupported = try write([0x00], named: "notes.txt", in: directory)
+
+        #expect(OptimizableFileSummary.fromFileHintExtensions([image]).kind == .image)
+        #expect(OptimizableFileSummary.fromFileHintExtensions([video]).kind == .video)
+        #expect(OptimizableFileSummary.fromFileHintExtensions([unsupported]).kind == .file)
+        #expect(OptimizableFileSummary.fromFileHintExtensions([image, video]).kind == .file)
+        #expect(OptimizableFileSummary.fromFileHintExtensions([]) == .fallback)
+    }
+
+    @Test func collectedFileSummaryStillUsesByteDetection() throws {
+        let directory = try temporaryDirectory()
+        let pngWithWrongExtension = try write([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A], named: "image.bin", in: directory)
+        let invalidPNG = try write([0x00], named: "invalid.png", in: directory)
+
+        #expect(OptimizableFileSummary.fromCollectedFiles([pngWithWrongExtension]).kind == .image)
+        #expect(OptimizableFileSummary.fromCollectedFiles([invalidPNG]).kind == .file)
+    }
+
     @Test func commandCatalogUsesBundledToolsForEachFormat() throws {
         let catalog = OptimizerCommandCatalog()
 

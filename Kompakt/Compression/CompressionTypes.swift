@@ -146,6 +146,39 @@ struct OptimizableFileSummary: Equatable {
         let kind = kinds.count == 1 ? (kinds.first ?? .file) : .file
         return OptimizableFileSummary(count: urls.count, kind: kind)
     }
+
+    static func fromFileHintExtensions(_ urls: [URL]) -> OptimizableFileSummary {
+        guard !urls.isEmpty else { return fallback }
+
+        let kinds = Set(urls.map { url in
+            FileFormat.fromFileExtension(url.pathExtension)?.optimizableKind ?? .file
+        })
+        let kind = kinds.count == 1 ? (kinds.first ?? .file) : .file
+        return OptimizableFileSummary(count: urls.count, kind: kind)
+    }
+}
+
+extension FileFormat {
+    static func fromFileExtension(_ fileExtension: String) -> FileFormat? {
+        switch fileExtension.lowercased() {
+        case "png":
+            .png
+        case "jpg", "jpeg":
+            .jpeg
+        case "gif":
+            .gif
+        case "webp":
+            .webp
+        case "mp4":
+            .mp4
+        case "mov":
+            .mov
+        case "m4v":
+            .m4v
+        default:
+            nil
+        }
+    }
 }
 
 enum CompressionStatus: Equatable {
