@@ -3,6 +3,22 @@
     <channel>
         <title>Kompakt</title>
         <item>
+            <title>1.0.4</title>
+            <pubDate>Thu, 21 May 2026 12:02:44 +0000</pubDate>
+            <link>https://github.com/edinabazi/Kompakt</link>
+            <sparkle:version>5</sparkle:version>
+            <sparkle:shortVersionString>1.0.4</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <sparkle:releaseNotesLink>https://edinabazi.github.io/Kompakt/Kompakt-v1.0.4.md</sparkle:releaseNotesLink>
+            <enclosure url="https://edinabazi.github.io/Kompakt/Kompakt-v1.0.4.zip" length="56650035" type="application/octet-stream" sparkle:edSignature="VxoPxPUwb+MZhBA4w7EN26k6To3OcZrsI4ZxNTbKUqkcw9XrcOwrJ295LiQTES3u7pa86w6iS9y8KGMHvslzBQ=="/>
+            <sparkle:deltas>
+                <enclosure url="https://edinabazi.github.io/Kompakt/Kompakt5-4.delta" sparkle:deltaFrom="4" length="249618" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977840" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="oiScsV92PjnTAW3IwfT0KEJhfvNcJmZYmlFfFy9uJppgD5RkU/+a0DYT7t2IzgNtdxstBoHSatsFl3YwWIqCDA=="/>
+                <enclosure url="https://edinabazi.github.io/Kompakt/Kompakt5-3.delta" sparkle:deltaFrom="3" length="1430586" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977840" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="K36xTSZS2QdO07/hMFAmHfnbZRurBpqSp50cdSCucIMoBc4HektXTh8IOhRXqRGgsrgySvt6Xmtd2fN61QZ6AQ=="/>
+                <enclosure url="https://edinabazi.github.io/Kompakt/Kompakt5-2.delta" sparkle:deltaFrom="2" length="1485722" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977840" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="DVGzNBbPV+oAtGcOAzozxfBBblLCwXQ3bTbyK0ukGCwxuT9fgngHXu/pg+pbxy/PE/cqita0TS+ThGGSY9c8AA=="/>
+                <enclosure url="https://edinabazi.github.io/Kompakt/Kompakt5-1.delta" sparkle:deltaFrom="1" length="1544098" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977840" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="RHbB4eOhfKZogamRvKt5ZZox6JIDJ8KHX2IdD6Hq+qg1h0+Wfh8TRACMfs2a+p1KroSeC57EcmXxc28odsHpAw=="/>
+            </sparkle:deltas>
+        </item>
+        <item>
             <title>1.0.3</title>
             <pubDate>Tue, 19 May 2026 12:21:13 +0000</pubDate>
             <link>https://github.com/edinabazi/Kompakt</link>
@@ -29,19 +45,6 @@
             <sparkle:deltas>
                 <enclosure url="https://edinabazi.github.io/Kompakt/Kompakt3-2.delta" sparkle:deltaFrom="2" length="171842" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977840" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="DBWqYMfX1nAcu1J0bVAlL+Rv8ToqFgLk3iSZ3XzLP9Z+7VKVuFqCjsy9XAJ5Seu/KzF9AUlcaDXxnmstp4N1AQ=="/>
                 <enclosure url="https://edinabazi.github.io/Kompakt/Kompakt3-1.delta" sparkle:deltaFrom="1" length="318654" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977840" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="IbHHW2h6aavb+IJVl1sfFqS5Yxlxk+OLGh1C/6k5OODykDOxRLFYaSN9TBZLUKmLMzgSqdjztRUiP+vURexdBQ=="/>
-            </sparkle:deltas>
-        </item>
-        <item>
-            <title>1.0.1</title>
-            <pubDate>Mon, 18 May 2026 15:47:07 +0000</pubDate>
-            <link>https://github.com/edinabazi/Kompakt</link>
-            <sparkle:version>2</sparkle:version>
-            <sparkle:shortVersionString>1.0.1</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <sparkle:releaseNotesLink>https://edinabazi.github.io/Kompakt/Kompakt-v1.0.1.md</sparkle:releaseNotesLink>
-            <enclosure url="https://edinabazi.github.io/Kompakt/Kompakt-v1.0.1.zip" length="56963522" type="application/octet-stream" sparkle:edSignature="HQNgm6JaO6nqihQ4Qh39bq78Bd6tEcqBmgVgwP+aSn/S8BQ4gjrzQouNok+zXzsCRpV7e5JiZHMTkjjtyg2eCQ=="/>
-            <sparkle:deltas>
-                <enclosure url="https://edinabazi.github.io/Kompakt/Kompakt2-1.delta" sparkle:deltaFrom="1" length="257322" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977840" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="adbtgFAzysUYb5WlzgUe/0KMbYkE2cKZIj45mz8GFTzXUqwlj6izRSgyw+P5qcCArU6sHvfpceUGcaytE+iBAQ=="/>
             </sparkle:deltas>
         </item>
     </channel>
