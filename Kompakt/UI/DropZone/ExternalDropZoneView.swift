@@ -285,20 +285,21 @@ struct ExternalDropZoneView: View {
             appModel.finishFirstLaunchOnboarding()
         }
 
-        fileSummary = OptimizableFileSummary.fromFileHints(urls)
+        fileSummary = OptimizableFileSummary.fromFileHintExtensions(urls)
         phase = .processing
         appModel.endExternalDrag(didDrop: true)
 
         Task {
             let fileURLs = await FileCollector.collectFilesAsync(from: urls)
+            let summary = await OptimizableFileSummary.fromCollectedFilesAsync(fileURLs)
 
             await MainActor.run {
-                finishLoadingDroppedFiles(fileURLs)
+                finishLoadingDroppedFiles(fileURLs, summary: summary)
             }
         }
     }
 
-    private func finishLoadingDroppedFiles(_ fileURLs: [URL]) {
+    private func finishLoadingDroppedFiles(_ fileURLs: [URL], summary: OptimizableFileSummary) {
         guard !fileURLs.isEmpty else {
             previewURLs = []
             previewTotalCount = 0
@@ -309,7 +310,7 @@ struct ExternalDropZoneView: View {
 
         previewURLs = Array(fileURLs.prefix(4))
         previewTotalCount = fileURLs.count
-        fileSummary = OptimizableFileSummary.fromCollectedFiles(fileURLs)
+        fileSummary = summary
 
         if appModel.compressionMode == .ask {
             pendingURLs = fileURLs
@@ -660,8 +661,9 @@ private final class DropReceiverNSView: NSView {
     var onDragLocationChanged: ((CGPoint?) -> Void)?
     var onDrop: (([URL]) -> Void)?
     private var isTargeted = false
+    private var acceptsCurrentDrag = false
     private var lastDragLocation: CGPoint?
-    private let dragLocationThreshold: CGFloat = 0.02
+    private let dragLocationThreshold: CGFloat = 0.05
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -677,29 +679,31 @@ private final class DropReceiverNSView: NSView {
 
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
         let acceptsDrop = acceptsFileURLs(from: sender)
+        acceptsCurrentDrag = acceptsDrop
         updateTargetState(acceptsDrop)
         updateDragLocation(acceptsDrop ? dragLocation(from: sender) : nil, force: true)
         return acceptsDrop ? .copy : []
     }
 
     override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
-        let acceptsDrop = acceptsFileURLs(from: sender)
-        updateTargetState(acceptsDrop)
-        updateDragLocation(acceptsDrop ? dragLocation(from: sender) : nil)
-        return acceptsDrop ? .copy : []
+        updateTargetState(acceptsCurrentDrag)
+        updateDragLocation(acceptsCurrentDrag ? dragLocation(from: sender) : nil)
+        return acceptsCurrentDrag ? .copy : []
     }
 
     override func draggingExited(_ sender: NSDraggingInfo?) {
+        acceptsCurrentDrag = false
         updateTargetState(false)
         updateDragLocation(nil, force: true)
     }
 
     override func prepareForDragOperation(_ sender: NSDraggingInfo) -> Bool {
-        acceptsFileURLs(from: sender)
+        acceptsCurrentDrag || acceptsFileURLs(from: sender)
     }
 
     override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
         let urls = supportedURLs(from: sender)
+        acceptsCurrentDrag = false
         updateTargetState(false)
         updateDragLocation(nil, force: true)
 
@@ -709,6 +713,7 @@ private final class DropReceiverNSView: NSView {
     }
 
     override func concludeDragOperation(_ sender: NSDraggingInfo?) {
+        acceptsCurrentDrag = false
         updateTargetState(false)
         updateDragLocation(nil, force: true)
     }

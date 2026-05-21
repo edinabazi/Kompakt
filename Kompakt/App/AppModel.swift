@@ -101,7 +101,16 @@ final class AppModel: ObservableObject {
     func handleDropped(urls: [URL]) {
         Task {
             let fileURLs = await FileCollector.collectFilesAsync(from: urls)
-            handleCollectedDrop(fileURLs)
+            let shouldBuildSummary = await MainActor.run {
+                compressionMode == .ask
+            }
+            let summary = shouldBuildSummary
+                ? await OptimizableFileSummary.fromCollectedFilesAsync(fileURLs)
+                : nil
+
+            await MainActor.run {
+                handleCollectedDrop(fileURLs, summary: summary)
+            }
         }
     }
 
@@ -279,7 +288,7 @@ final class AppModel: ObservableObject {
         jobs[index].status = .reverted
     }
 
-    private func handleCollectedDrop(_ fileURLs: [URL]) {
+    private func handleCollectedDrop(_ fileURLs: [URL], summary: OptimizableFileSummary? = nil) {
         guard !fileURLs.isEmpty else {
             lastMessage = "No supported files found."
             return
@@ -288,7 +297,7 @@ final class AppModel: ObservableObject {
         switch compressionMode {
         case .ask:
             pendingAskURLs = fileURLs
-            pendingAskSummary = OptimizableFileSummary.fromCollectedFiles(fileURLs)
+            pendingAskSummary = summary ?? OptimizableFileSummary.fromCollectedFiles(fileURLs)
             lastMessage = "Choose optimization for \(fileURLs.count) file\(fileURLs.count == 1 ? "" : "s")."
         case .lossless, .smaller:
             start(urls: fileURLs, mode: compressionMode)

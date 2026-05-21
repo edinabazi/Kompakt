@@ -137,6 +137,12 @@ struct OptimizableFileSummary: Equatable {
         return OptimizableFileSummary(count: urls.count, kind: kind)
     }
 
+    static func fromCollectedFilesAsync(_ urls: [URL]) async -> OptimizableFileSummary {
+        await Task.detached(priority: .userInitiated) {
+            fromCollectedFiles(urls)
+        }.value
+    }
+
     static func fromFileHints(_ urls: [URL]) -> OptimizableFileSummary {
         guard !urls.isEmpty else { return fallback }
 
