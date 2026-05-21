@@ -14,7 +14,7 @@ final class AppModel: ObservableObject {
     @AppStorage("showEscapeHint") var showEscapeHint = true
     @AppStorage("hasSeenFirstLaunchOnboarding") private var hasSeenFirstLaunchOnboarding = false
 
-    @Published private(set) var jobs: [CompressionJob] = []
+    private(set) var jobs: [CompressionJob] = []
     @Published private(set) var isProcessing = false
     @Published private(set) var lastMessage = "Drop files to Kompakt."
     @Published private(set) var pendingAskSummary: OptimizableFileSummary?
@@ -27,6 +27,7 @@ final class AppModel: ObservableObject {
     private weak var menuBarController: MenuBarController?
     private weak var externalDropZoneController: ExternalDropZoneController?
     private var pendingAskURLs: [URL] = []
+    private var jobIndexByID: [CompressionJob.ID: Int] = [:]
     private var firstLaunchOnboardingActive = false
     private var receivedFileOpenRequest = false
 
@@ -161,6 +162,7 @@ final class AppModel: ObservableObject {
             CompressionJob(batchID: batchID, url: $0, mode: runnableMode, videoMode: effectiveVideoMode, outputMode: outputMode)
         }
         jobs.insert(contentsOf: newJobs, at: 0)
+        rebuildJobIndex()
         lastMessage = "Queued \(newJobs.count) file\(newJobs.count == 1 ? "" : "s")."
         refreshJobSummary()
         run(jobs: newJobs, onFinished: onFinished)
@@ -168,6 +170,7 @@ final class AppModel: ObservableObject {
 
     func clearCompleted() {
         jobs.removeAll { $0.status.isFinished }
+        rebuildJobIndex()
         refreshJobSummary()
     }
 
@@ -320,10 +323,18 @@ final class AppModel: ObservableObject {
     }
 
     private func update(job: CompressionJob) {
-        guard let index = jobs.firstIndex(where: { $0.id == job.id }) else { return }
+        guard let index = jobIndexByID[job.id], jobs.indices.contains(index) else { return }
         jobs[index] = job
         lastMessage = job.status.message
-        refreshJobSummary()
+        if job.status.isFinished {
+            refreshJobSummary()
+        }
+    }
+
+    private func rebuildJobIndex() {
+        jobIndexByID = Dictionary(uniqueKeysWithValues: jobs.enumerated().map { index, job in
+            (job.id, index)
+        })
     }
 
     private func refreshJobSummary() {
@@ -365,6 +376,7 @@ final class AppModel: ObservableObject {
 extension AppModel {
     func replaceJobsForTesting(_ jobs: [CompressionJob]) {
         self.jobs = jobs
+        rebuildJobIndex()
         refreshJobSummary()
     }
 }
