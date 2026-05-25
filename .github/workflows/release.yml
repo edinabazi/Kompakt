@@ -220,25 +220,23 @@ jobs:
           fi
 
           versioned_zip="$APP_NAME-${GITHUB_REF_NAME}.zip"
+          echo "Copying release zip into appcast worktree"
           cp "build/$APP_NAME.zip" "build/pages/$versioned_zip"
-          cat > "build/pages/$APP_NAME-${GITHUB_REF_NAME}.md" <<EOF
-          # $APP_NAME $GITHUB_REF_NAME
-
-          - Added SVG/GIF support
-          - Right-click options for completed kompaktions
-          - Fixed text color in light mode
-          EOF
+          printf '# %s %s\n\n- Added SVG/GIF support\n- Right-click options for completed kompaktions\n- Fixed text color in light mode\n' "$APP_NAME" "$GITHUB_REF_NAME" > "build/pages/$APP_NAME-${GITHUB_REF_NAME}.md"
+          ls -lh "build/pages/$versioned_zip" "build/pages/$APP_NAME-${GITHUB_REF_NAME}.md"
 
           generate_appcast="$(find "$HOME/Library/Developer/Xcode/DerivedData" -path '*/SourcePackages/artifacts/sparkle/Sparkle/bin/generate_appcast' -type f | head -n 1)"
           test -x "$generate_appcast"
 
-          echo "$SPARKLE_PRIVATE_ED_KEY" | "$generate_appcast" \
+          echo "Generating Sparkle appcast"
+          echo "$SPARKLE_PRIVATE_ED_KEY" | timeout 300 "$generate_appcast" \
             --ed-key-file - \
             --download-url-prefix "https://edinabazi.github.io/Kompakt/" \
             --link "https://github.com/edinabazi/Kompakt" \
             build/pages
 
           cd build/pages
+          echo "Publishing appcast to gh-pages"
           git checkout -B gh-pages
           git add .
           git commit -m "Update Sparkle appcast for ${GITHUB_REF_NAME}"
@@ -263,12 +261,7 @@ jobs:
             "build/$APP_NAME.dmg" \
             "build/$APP_NAME.dmg.sha256" \
             --title "$APP_NAME ${GITHUB_REF_NAME}" \
-            --notes "$(cat <<'EOF'
-          - Added SVG/GIF support
-          - Right-click options for completed kompaktions
-          - Fixed text color in light mode
-          EOF
-          )"
+            --notes "$(printf '%s\n' '- Added SVG/GIF support' '- Right-click options for completed kompaktions' '- Fixed text color in light mode')"
 
       - name: Delete temporary keychain
         if: always()
