@@ -34,8 +34,6 @@ Right now it focuses on quick image and video optimization through a lightweight
 
 - Convert files
 - Watched folders
-- Clipboard optimization
 - Finder actions
 - Custom presets
-- Compression history
 - Shortcuts support
