@@ -229,11 +229,25 @@ jobs:
           test -x "$generate_appcast"
 
           echo "Generating Sparkle appcast"
-          echo "$SPARKLE_PRIVATE_ED_KEY" | timeout 300 "$generate_appcast" \
-            --ed-key-file - \
-            --download-url-prefix "https://edinabazi.github.io/Kompakt/" \
-            --link "https://github.com/edinabazi/Kompakt" \
-            build/pages
+          GENERATE_APPCAST="$generate_appcast" python3 - <<'PY'
+          import os
+          import subprocess
+
+          command = [
+              os.environ["GENERATE_APPCAST"],
+              "--ed-key-file", "-",
+              "--download-url-prefix", "https://edinabazi.github.io/Kompakt/",
+              "--link", "https://github.com/edinabazi/Kompakt",
+              "build/pages",
+          ]
+          subprocess.run(
+              command,
+              input=os.environ["SPARKLE_PRIVATE_ED_KEY"] + "\n",
+              text=True,
+              check=True,
+              timeout=300,
+          )
+          PY
 
           cd build/pages
           echo "Publishing appcast to gh-pages"
