@@ -238,6 +238,8 @@ jobs:
               "--ed-key-file", "-",
               "--download-url-prefix", "https://edinabazi.github.io/Kompakt/",
               "--link", "https://github.com/edinabazi/Kompakt",
+              "--versions", "6",
+              "--maximum-deltas", "0",
               "build/pages",
           ]
           subprocess.run(
