@@ -236,7 +236,7 @@ jobs:
           command = [
               os.environ["GENERATE_APPCAST"],
               "--ed-key-file", "-",
-              "--download-url-prefix", "https://edinabazi.github.io/Kompakt/",
+              "--download-url-prefix", f"https://github.com/edinabazi/Kompakt/releases/download/{os.environ['GITHUB_REF_NAME']}/",
               "--link", "https://github.com/edinabazi/Kompakt",
               "--versions", "6",
               "--maximum-deltas", "0",
@@ -252,6 +252,7 @@ jobs:
           PY
 
           cd build/pages
+          rm -f "$versioned_zip"
           echo "Publishing appcast to gh-pages"
           git checkout -B gh-pages
           git add .
@@ -273,7 +274,11 @@ jobs:
         run: |
           set -euo pipefail
 
+          versioned_zip="build/$APP_NAME-${GITHUB_REF_NAME}.zip"
+          cp "build/$APP_NAME.zip" "$versioned_zip"
+
           gh release create "${GITHUB_REF_NAME}" \
+            "$versioned_zip" \
             "build/$APP_NAME.dmg" \
             "build/$APP_NAME.dmg.sha256" \
             --title "$APP_NAME ${GITHUB_REF_NAME}" \
