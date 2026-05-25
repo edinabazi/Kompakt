@@ -447,6 +447,8 @@ struct MenuBarPopoverView: View {
                             PopoverHistoryRow(
                                 job: job,
                                 revealAction: { appModel.reveal(job) },
+                                copyPathAction: { appModel.copyPath(job) },
+                                removeAction: { appModel.removeFromHistory(job) },
                                 revertAction: { appModel.revert(job: job) }
                             )
                             if job.id != lastJobID {
@@ -687,6 +689,8 @@ private extension OutputMode {
 private struct PopoverHistoryRow: View {
     let job: CompressionJob
     let revealAction: () -> Void
+    let copyPathAction: () -> Void
+    let removeAction: () -> Void
     let revertAction: () -> Void
 
     var body: some View {
@@ -730,6 +734,22 @@ private struct PopoverHistoryRow: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
+        .contentShape(Rectangle())
+        .contextMenu {
+            Button(action: revealAction) {
+                Label("Reveal in Finder", systemImage: "magnifyingglass")
+            }
+
+            Button(action: copyPathAction) {
+                Label("Copy Path", systemImage: "doc.on.doc")
+            }
+
+            Divider()
+
+            Button(role: .destructive, action: removeAction) {
+                Label("Remove from History", systemImage: "xmark")
+            }
+        }
     }
 
     private var detailText: String {

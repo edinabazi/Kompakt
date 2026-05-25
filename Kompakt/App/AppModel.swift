@@ -188,6 +188,19 @@ final class AppModel: ObservableObject {
         NSWorkspace.shared.activateFileViewerSelecting([url])
     }
 
+    func copyPath(_ job: CompressionJob) {
+        let url = job.result?.outputURL ?? job.url
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(url.path, forType: .string)
+        lastMessage = "Copied \(url.lastPathComponent) path."
+    }
+
+    func removeFromHistory(_ job: CompressionJob) {
+        jobs.removeAll { $0.id == job.id && $0.status.isFinished }
+        rebuildJobIndex()
+        refreshJobSummary()
+    }
+
     func revert(job: CompressionJob) {
         guard let index = jobs.firstIndex(where: { $0.id == job.id }),
               jobs[index].result != nil else {
