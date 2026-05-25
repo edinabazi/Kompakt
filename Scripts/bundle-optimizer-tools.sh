@@ -12,6 +12,7 @@ jpegoptim
 cjpeg
 cwebp
 gifsicle
+svgo
 ffmpeg
 libjpeg.62.dylib
 libjpeg.8.dylib

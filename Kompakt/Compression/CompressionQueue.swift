@@ -54,7 +54,7 @@ actor CompressionQueue {
 
         let compressedSize = try fileSize(candidate.url)
         guard compressedSize > 0, compressedSize < originalSize else {
-            job.status = .skipped("Already compact.")
+            job.status = .skipped("Already kompakt.")
             return job
         }
 
@@ -233,6 +233,20 @@ struct OptimizerCommandCatalog {
                         var args = ["-O3", "--careful", "--no-comments", "--no-names", "-o", output.path, "--", input.path]
                         if mode == .smaller {
                             args.insert("--lossy=40", at: 0)
+                        }
+                        return args
+                    },
+                    copiesInputFirst: false
+                )
+            ]
+        case .svg:
+            return [
+                OptimizerCommand(
+                    tool: .svgo,
+                    arguments: { input, output, mode in
+                        var args = ["-i", input.path, "-o", output.path]
+                        if mode == .smaller {
+                            args.insert("--multipass", at: 0)
                         }
                         return args
                     },

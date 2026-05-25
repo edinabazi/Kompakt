@@ -86,6 +86,26 @@
 		</dict>
 			<dict>
 				<key>CFBundleTypeName</key>
+				<string>SVG Image</string>
+				<key>CFBundleTypeExtensions</key>
+				<array>
+					<string>svg</string>
+				</array>
+				<key>CFBundleTypeMIMETypes</key>
+				<array>
+					<string>image/svg+xml</string>
+				</array>
+				<key>CFBundleTypeRole</key>
+				<string>Editor</string>
+				<key>LSHandlerRank</key>
+				<string>Default</string>
+				<key>LSItemContentTypes</key>
+				<array>
+					<string>public.svg-image</string>
+				</array>
+		</dict>
+			<dict>
+				<key>CFBundleTypeName</key>
 				<string>WebP Image</string>
 				<key>CFBundleTypeExtensions</key>
 				<array>

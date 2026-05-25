@@ -9,7 +9,7 @@ enum FileFormatDetector {
         }
         defer { try? handle.close() }
 
-        let data = (try? handle.read(upToCount: 12)) ?? Data()
+        let data = (try? handle.read(upToCount: 4096)) ?? Data()
         let bytes = [UInt8](data)
 
         if bytes.starts(with: [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A]) {
@@ -26,6 +26,10 @@ enum FileFormatDetector {
 
         if isWebPHeader(bytes) {
             return .webp
+        }
+
+        if pathExtension == "svg", isSVG(data) {
+            return .svg
         }
 
         if bytes.count >= 8,
@@ -97,5 +101,32 @@ enum FileFormatDetector {
             && bytes[9] == 0x45
             && bytes[10] == 0x42
             && bytes[11] == 0x50
+    }
+
+    private static func isSVG(_ data: Data) -> Bool {
+        guard let text = String(data: data, encoding: .utf8) else {
+            return false
+        }
+
+        var trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.hasPrefix("\u{FEFF}") {
+            trimmed.removeFirst()
+            trimmed = trimmed.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        if trimmed.lowercased().hasPrefix("<svg") {
+            return true
+        }
+
+        guard trimmed.lowercased().hasPrefix("<?xml") else {
+            return false
+        }
+
+        guard let declarationEnd = trimmed.range(of: "?>")?.upperBound else {
+            return false
+        }
+
+        let afterDeclaration = trimmed[declarationEnd...].trimmingCharacters(in: .whitespacesAndNewlines)
+        return afterDeclaration.lowercased().hasPrefix("<svg")
     }
 }

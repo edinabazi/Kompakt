@@ -66,6 +66,7 @@ enum FileFormat: String {
     case png
     case jpeg
     case gif
+    case svg
     case webp
     case mp4
     case mov
@@ -82,14 +83,14 @@ enum FileFormat: String {
         switch self {
         case .mp4, .mov, .m4v:
             true
-        case .png, .jpeg, .gif, .webp:
+        case .png, .jpeg, .gif, .svg, .webp:
             false
         }
     }
 
     var optimizableKind: OptimizableFileKind {
         switch self {
-        case .png, .jpeg, .gif, .webp:
+        case .png, .jpeg, .gif, .svg, .webp:
             .image
         case .mp4, .mov, .m4v:
             .video
@@ -173,6 +174,8 @@ extension FileFormat {
             .jpeg
         case "gif":
             .gif
+        case "svg":
+            .svg
         case "webp":
             .webp
         case "mp4":

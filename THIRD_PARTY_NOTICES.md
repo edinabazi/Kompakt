@@ -12,6 +12,7 @@ This file is a maintainer checklist, not legal advice. Confirm licenses and redi
 - `jpegoptim` - JPEG optimizer. Check upstream license and notices before updating.
 - `cwebp` - WebP encoder from Google's WebP tools. Check upstream license and notices before updating.
 - `gifsicle` - GIF optimizer. Check upstream license and notices before updating.
+- `svgo` - SVG optimizer. Check upstream license and notices before updating.
 - `ffmpeg` - video/audio processing. FFmpeg builds can include components under different licenses; follow the upstream legal guidance for the exact build that is redistributed.
 - `libjpeg.62.dylib`, `libjpeg.8.dylib`, `libpng16.16.dylib` - runtime libraries required by bundled helpers.
 

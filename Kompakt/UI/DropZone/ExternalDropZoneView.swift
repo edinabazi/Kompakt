@@ -1,6 +1,7 @@
 import AppKit
 import AVFoundation
 import ImageIO
+import QuickLookThumbnailing
 import SwiftUI
 
 struct ExternalDropZoneView: View {
@@ -232,7 +233,7 @@ struct ExternalDropZoneView: View {
                     .tracking(-0.72)
                     .foregroundStyle(.white)
 
-                Text("Already compact")
+                Text("Already kompakt")
                     .font(.system(size: 13, weight: .medium))
                     .tracking(-0.26)
                     .foregroundStyle(.white.opacity(0.72))
@@ -581,7 +582,7 @@ private struct PreviewCard: View {
         let size = size
         let url = url
         let preview = await Task.detached(priority: .userInitiated) {
-            PreviewLoader.load(url: url, size: size)
+            await PreviewLoader.load(url: url, size: size)
         }.value
 
         previewImage = preview.image
@@ -595,9 +596,21 @@ private enum PreviewLoader {
         let isVideo: Bool
     }
 
-    static func load(url: URL, size: CGFloat) -> Preview {
-        let isVideo = FileFormatDetector.detect(url)?.isVideo == true
-        let image = isVideo ? videoPreviewImage(for: url, size: size) : imagePreview(for: url, size: size)
+    static func load(url: URL, size: CGFloat) async -> Preview {
+        let format = FileFormatDetector.detect(url)
+        let isVideo = format?.isVideo == true
+        let image: NSImage?
+
+        if isVideo {
+            image = videoPreviewImage(for: url, size: size)
+        } else if let preview = imagePreview(for: url, size: size) {
+            image = preview
+        } else if format == .svg {
+            image = await quickLookPreview(for: url, size: size)
+        } else {
+            image = nil
+        }
+
         return Preview(image: image, isVideo: isVideo)
     }
 
@@ -616,6 +629,21 @@ private enum PreviewLoader {
         }
 
         return NSImage(cgImage: image, size: CGSize(width: image.width, height: image.height))
+    }
+
+    private static func quickLookPreview(for url: URL, size: CGFloat) async -> NSImage? {
+        let request = QLThumbnailGenerator.Request(
+            fileAt: url,
+            size: CGSize(width: size * 3, height: size * 3),
+            scale: NSScreen.main?.backingScaleFactor ?? 2,
+            representationTypes: .thumbnail
+        )
+
+        return await withCheckedContinuation { continuation in
+            QLThumbnailGenerator.shared.generateBestRepresentation(for: request) { representation, _ in
+                continuation.resume(returning: representation?.nsImage)
+            }
+        }
     }
 
     private static func videoPreviewImage(for url: URL, size: CGFloat) -> NSImage? {

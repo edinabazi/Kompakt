@@ -8,6 +8,7 @@ enum OptimizerTool: String, CaseIterable {
     case mozjpeg
     case cwebp
     case gifsicle
+    case svgo
     case ffmpeg
     case imageIO
 
@@ -20,6 +21,7 @@ enum OptimizerTool: String, CaseIterable {
         case .mozjpeg: "mozjpeg"
         case .cwebp: "cwebp"
         case .gifsicle: "gifsicle"
+        case .svgo: "svgo"
         case .ffmpeg: "ffmpeg"
         case .imageIO: "ImageIO"
         }

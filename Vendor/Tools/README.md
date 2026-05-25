@@ -27,18 +27,20 @@ Bundled helper names:
 - `cjpeg`
 - `cwebp`
 - `gifsicle`
+- `svgo`
 - `ffmpeg`
 - `libjpeg.62.dylib`
 - `libjpeg.8.dylib`
 - `libpng16.16.dylib`
 
-`fetch-oxipng.sh` refreshes the Rust-distributed `oxipng` release. `fetch-webp-tools.sh` refreshes Google's statically linked `cwebp` release from the official WebP archives. `fetch-ffmpeg-tools.sh` refreshes the static macOS `ffmpeg` helper. `fetch-optimizer-tools.sh` fetches the remaining image helpers from Homebrew bottles for direct distribution builds. Homebrew is only a maintainer-side fetch mechanism; the built app does not call or require it.
+`fetch-oxipng.sh` refreshes the Rust-distributed `oxipng` release. `fetch-webp-tools.sh` refreshes Google's statically linked `cwebp` release from the official WebP archives. `fetch-svgo-tool.sh` builds a standalone `svgo` helper from the pinned npm package. `fetch-ffmpeg-tools.sh` refreshes the static macOS `ffmpeg` helper. `fetch-optimizer-tools.sh` fetches the remaining image helpers from Homebrew bottles for direct distribution builds. Homebrew, npm, and Bun are only maintainer-side fetch/build mechanisms; the built app does not call or require them.
 
 Do not commit generated helper binaries. Run these before verifying, building, or archiving a release:
 
 ```sh
 Scripts/fetch-oxipng.sh
 Scripts/fetch-webp-tools.sh
+Scripts/fetch-svgo-tool.sh
 Scripts/fetch-optimizer-tools.sh
 Scripts/fetch-ffmpeg-tools.sh
 ```

@@ -10,6 +10,7 @@ struct KompaktTests {
         let png = try write([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x00], named: "wrong.txt", in: directory)
         let jpeg = try write([0xFF, 0xD8, 0xFF, 0xE0, 0x00], named: "photo.bin", in: directory)
         let gif = try write([0x47, 0x49, 0x46, 0x38, 0x39, 0x61], named: "loop.data", in: directory)
+        let svg = try write(Array("<?xml version=\"1.0\"?><svg xmlns=\"http://www.w3.org/2000/svg\"/>".utf8), named: "vector.svg", in: directory)
         let webp = try write(Array("RIFF".utf8) + [0x00, 0x00, 0x00, 0x00] + Array("WEBP".utf8), named: "picture.bin", in: directory)
         let mp4 = try write([0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70], named: "clip.mp4", in: directory)
         let bad = try write([0x00, 0x01, 0x02], named: "bad.png", in: directory)
@@ -17,6 +18,7 @@ struct KompaktTests {
         #expect(FileFormatDetector.detect(png) == .png)
         #expect(FileFormatDetector.detect(jpeg) == .jpeg)
         #expect(FileFormatDetector.detect(gif) == .gif)
+        #expect(FileFormatDetector.detect(svg) == .svg)
         #expect(FileFormatDetector.detect(webp) == .webp)
         #expect(FileFormatDetector.detect(mp4) == .mp4)
         #expect(FileFormatDetector.detect(bad) == nil)
@@ -48,6 +50,7 @@ struct KompaktTests {
         let jpeg = try write([0xFF, 0xD8, 0xFF], named: "b.jpg", in: nested)
         let movie = try write([0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70], named: "d.mov", in: nested)
         let webp = try write(Array("RIFF".utf8) + [0x00, 0x00, 0x00, 0x00] + Array("WEBP".utf8), named: "e.webp", in: nested)
+        let svg = try write(Array("<svg xmlns=\"http://www.w3.org/2000/svg\"/>".utf8), named: "f.svg", in: nested)
         _ = try write([0x00], named: "c.bin", in: nested)
         _ = try write([0x00], named: "notes.txt", in: nested)
 
@@ -57,7 +60,8 @@ struct KompaktTests {
         #expect(files.contains(jpeg.standardizedFileURL))
         #expect(files.contains(movie.standardizedFileURL))
         #expect(files.contains(webp.standardizedFileURL))
-        #expect(files.count == 4)
+        #expect(files.contains(svg.standardizedFileURL))
+        #expect(files.count == 5)
     }
 
     @Test func asyncCollectorMatchesSynchronousCollector() async throws {
@@ -90,10 +94,12 @@ struct KompaktTests {
     @Test func fileHintExtensionSummaryClassifiesWithoutReadingBytes() throws {
         let directory = try temporaryDirectory()
         let image = try write([0x00], named: "image.png", in: directory)
+        let svg = try write([0x00], named: "vector.svg", in: directory)
         let video = try write([0x00], named: "video.mov", in: directory)
         let unsupported = try write([0x00], named: "notes.txt", in: directory)
 
         #expect(OptimizableFileSummary.fromFileHintExtensions([image]).kind == .image)
+        #expect(OptimizableFileSummary.fromFileHintExtensions([svg]).kind == .image)
         #expect(OptimizableFileSummary.fromFileHintExtensions([video]).kind == .video)
         #expect(OptimizableFileSummary.fromFileHintExtensions([unsupported]).kind == .file)
         #expect(OptimizableFileSummary.fromFileHintExtensions([image, video]).kind == .file)
@@ -116,12 +122,14 @@ struct KompaktTests {
         #expect(catalog.commands(for: .jpeg, mode: .lossless, videoMode: nil).map(\.tool) == [.jpegoptim, .jpegtran])
         #expect(catalog.commands(for: .jpeg, mode: .smaller, videoMode: nil).map(\.tool).first == .mozjpeg)
         #expect(catalog.commands(for: .gif, mode: .lossless, videoMode: nil).map(\.tool) == [.gifsicle])
+        #expect(catalog.commands(for: .svg, mode: .lossless, videoMode: nil).map(\.tool) == [.svgo])
         #expect(catalog.commands(for: .webp, mode: .lossless, videoMode: nil).map(\.tool) == [.cwebp])
         #expect(catalog.commands(for: .mp4, mode: .smaller, videoMode: .downscale720).map(\.tool) == [.ffmpeg])
     }
 
     @Test func toolExecutableNamesMatchBundledHelperNames() {
         #expect(OptimizerTool.mozjpeg.executableNames == ["cjpeg"])
+        #expect(OptimizerTool.svgo.executableNames == ["svgo"])
         #expect(OptimizerTool.ffmpeg.executableNames == ["ffmpeg"])
         #expect(OptimizerTool.imageIO.executableNames.isEmpty)
     }

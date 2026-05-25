@@ -2,7 +2,7 @@ import Foundation
 
 enum FileCollector {
     private static let supportedExtensions: Set<String> = [
-        "png", "jpg", "jpeg", "gif", "webp",
+        "png", "jpg", "jpeg", "gif", "svg", "webp",
         "mp4", "mov", "m4v"
     ]
 

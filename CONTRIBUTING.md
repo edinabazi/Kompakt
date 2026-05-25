@@ -28,6 +28,7 @@ When changing bundled tools:
 
 - Update `Vendor/Tools/README.md`.
 - Update `THIRD_PARTY_NOTICES.md`.
+- Run the relevant `Scripts/fetch-*.sh` helper, including `Scripts/fetch-svgo-tool.sh` when refreshing SVGO.
 - Verify architectures with `file` or `lipo -info`.
 - Verify linked libraries with `otool -L`.
 - Keep non-system dylib references relative to `@loader_path`.
