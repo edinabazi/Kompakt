@@ -36,6 +36,7 @@ jobs:
         run: |
           ./Scripts/fetch-oxipng.sh
           ./Scripts/fetch-webp-tools.sh
+          ./Scripts/fetch-svgo-tool.sh
           ./Scripts/fetch-optimizer-tools.sh
           ./Scripts/fetch-ffmpeg-tools.sh
 
@@ -215,7 +216,13 @@ jobs:
 
           versioned_zip="$APP_NAME-${GITHUB_REF_NAME}.zip"
           cp "build/$APP_NAME.zip" "build/pages/$versioned_zip"
-          printf '# %s %s\n\nSigned and notarized macOS release.\n' "$APP_NAME" "$GITHUB_REF_NAME" > "build/pages/$APP_NAME-${GITHUB_REF_NAME}.md"
+          cat > "build/pages/$APP_NAME-${GITHUB_REF_NAME}.md" <<EOF
+          # $APP_NAME $GITHUB_REF_NAME
+
+          - Added SVG/GIF support
+          - Right-click options for completed kompaktions
+          - Fixed text color in light mode
+          EOF
 
           generate_appcast="$(find "$HOME/Library/Developer/Xcode/DerivedData" -path '*/SourcePackages/artifacts/sparkle/Sparkle/bin/generate_appcast' -type f | head -n 1)"
           test -x "$generate_appcast"
@@ -251,7 +258,12 @@ jobs:
             "build/$APP_NAME.dmg" \
             "build/$APP_NAME.dmg.sha256" \
             --title "$APP_NAME ${GITHUB_REF_NAME}" \
-            --notes "Signed and notarized macOS DMG release."
+            --notes "$(cat <<'EOF'
+          - Added SVG/GIF support
+          - Right-click options for completed kompaktions
+          - Fixed text color in light mode
+          EOF
+          )"
 
       - name: Delete temporary keychain
         if: always()
