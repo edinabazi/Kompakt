@@ -873,6 +873,7 @@ private struct PopoverToggleRow: View {
     let title: String
     let subtitle: String
     @Binding var isOn: Bool
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         HStack {
@@ -881,7 +882,7 @@ private struct PopoverToggleRow: View {
                     .font(.system(size: 13, weight: .semibold))
                 Text(subtitle)
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(MenuBarPopoverMetrics.settingsSubtitleColor)
+                    .foregroundStyle(MenuBarPopoverMetrics.settingsSubtitleColor(for: colorScheme))
                     .lineLimit(2)
             }
             Spacer()
@@ -898,6 +899,7 @@ private struct PopoverSegmentRow<Control: View>: View {
     let title: String
     let subtitle: String
     let control: Control
+    @Environment(\.colorScheme) private var colorScheme
 
     init(title: String, subtitle: String, @ViewBuilder control: () -> Control) {
         self.title = title
@@ -913,7 +915,7 @@ private struct PopoverSegmentRow<Control: View>: View {
                         .font(.system(size: 13, weight: .semibold))
                     Text(subtitle)
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(MenuBarPopoverMetrics.settingsSubtitleColor)
+                        .foregroundStyle(MenuBarPopoverMetrics.settingsSubtitleColor(for: colorScheme))
                 }
                 Spacer()
             }
@@ -984,7 +986,10 @@ enum MenuBarPopoverMetrics {
     static let footerHeight: CGFloat = 30
     static let size = NSSize(width: width, height: historyHeight)
     static let accentColor = Color(red: 0x10 / 255, green: 0x41 / 255, blue: 0xc7 / 255)
-    static let settingsSubtitleColor = Color.white.opacity(0.66)
+
+    static func settingsSubtitleColor(for colorScheme: ColorScheme) -> Color {
+        colorScheme == .dark ? Color.white.opacity(0.66) : Color.black.opacity(0.54)
+    }
 }
 
 private struct PopoverButtonRow: View {
