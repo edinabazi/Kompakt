@@ -20,6 +20,7 @@ final class AppModel: ObservableObject {
     @Published private(set) var pendingAskSummary: OptimizableFileSummary?
     @Published private(set) var externalDragActive = false
     @Published private(set) var externalDragSummary = OptimizableFileSummary.fallback
+    @Published private(set) var externalDragConversionTargets: [FileFormat] = []
     @Published private var jobSummary = JobSummary()
 
     private let queue = CompressionQueue()
@@ -30,6 +31,7 @@ final class AppModel: ObservableObject {
     private var jobIndexByID: [CompressionJob.ID: Int] = [:]
     private var firstLaunchOnboardingActive = false
     private var receivedFileOpenRequest = false
+    private var externalDragHintID = UUID()
 
     private init() {
         if compressionMode == .ask {
@@ -82,14 +84,33 @@ final class AppModel: ObservableObject {
 
     func beginExternalDrag(urls: [URL]) {
         finishFirstLaunchOnboarding()
+        let hintID = UUID()
+        externalDragHintID = hintID
         externalDragSummary = urls.isEmpty ? .fallback : OptimizableFileSummary.fromFileHintExtensions(urls)
+        externalDragConversionTargets = ConversionCatalog.targetFormats(fromFileHintExtensions: urls)
         externalDragActive = true
+
+        Task {
+            let fileURLs = await FileCollector.collectFilesAsync(from: urls)
+            let detectedTargets = ConversionCatalog.targetFormats(fromCollectedFiles: fileURLs)
+            let detectedSummary = await OptimizableFileSummary.fromCollectedFilesAsync(fileURLs)
+
+            await MainActor.run {
+                guard self.externalDragActive, self.externalDragHintID == hintID else { return }
+                if !fileURLs.isEmpty {
+                    self.externalDragSummary = detectedSummary
+                    self.externalDragConversionTargets = detectedTargets
+                }
+            }
+        }
     }
 
     func endExternalDrag(didDrop: Bool) {
         guard externalDragActive else { return }
+        externalDragHintID = UUID()
         externalDragActive = false
         externalDragSummary = .fallback
+        externalDragConversionTargets = []
         externalDropZoneController?.endDrag(didDrop: didDrop)
     }
 
@@ -173,6 +194,31 @@ final class AppModel: ObservableObject {
         jobs.insert(contentsOf: newJobs, at: 0)
         rebuildJobIndex()
         lastMessage = "Queued \(newJobs.count) file\(newJobs.count == 1 ? "" : "s")."
+        refreshJobSummary()
+        run(jobs: newJobs, onFinished: onFinished)
+    }
+
+    func startConversion(
+        urls: [URL],
+        targetFormat: FileFormat,
+        onFinished: ((CompressionBatchSummary?) -> Void)? = nil
+    ) {
+        let runnableMode: CompressionMode = compressionMode == .ask ? .smaller : compressionMode
+        let effectiveVideoMode = runnableMode == .smaller ? defaultVideoMode : nil
+        let batchID = UUID()
+        let newJobs = urls.map {
+            CompressionJob(
+                batchID: batchID,
+                url: $0,
+                mode: runnableMode,
+                videoMode: effectiveVideoMode,
+                outputMode: .createCopies,
+                operation: .convert(targetFormat)
+            )
+        }
+        jobs.insert(contentsOf: newJobs, at: 0)
+        rebuildJobIndex()
+        lastMessage = "Queued \(newJobs.count) konversion\(newJobs.count == 1 ? "" : "s")."
         refreshJobSummary()
         run(jobs: newJobs, onFinished: onFinished)
     }
@@ -347,7 +393,7 @@ final class AppModel: ObservableObject {
     private func update(job: CompressionJob) {
         guard let index = jobIndexByID[job.id], jobs.indices.contains(index) else { return }
         jobs[index] = job
-        lastMessage = job.status.message
+        lastMessage = job.status.message(for: job.operation)
         if job.status.isFinished {
             refreshJobSummary()
         }
@@ -369,9 +415,11 @@ final class AppModel: ObservableObject {
                 completedJobs.append(job)
             }
 
-            if let result = job.result {
+            if let result = job.result, !job.operation.isConversion {
                 totalBytesSaved += result.bytesSaved
+            }
 
+            if job.result != nil {
                 if recentCompletedJobs.count < 10 {
                     recentCompletedJobs.append(job)
                 }
@@ -388,9 +436,19 @@ final class AppModel: ObservableObject {
     }
 
     private func summaryMessage() -> String {
-        let finished = completedJobs.count
+        let converted = completedJobs.filter { $0.result != nil && $0.operation.isConversion }.count
+        let optimized = completedJobs.filter { $0.result != nil && !$0.operation.isConversion }.count
         let saved = ByteCountFormatter.string(fromByteCount: totalBytesSaved, countStyle: .file)
-        return finished == 0 ? "Ready." : "\(finished) file\(finished == 1 ? "" : "s") kompakted · \(saved) saved."
+        if optimized + converted == 0 {
+            return "Ready."
+        }
+        if optimized > 0, converted > 0 {
+            return "\(optimized) kompakted, \(converted) konverted · \(saved) saved."
+        }
+        if converted > 0 {
+            return "\(converted) file\(converted == 1 ? "" : "s") konverted."
+        }
+        return "\(optimized) file\(optimized == 1 ? "" : "s") kompakted · \(saved) saved."
     }
 }
 

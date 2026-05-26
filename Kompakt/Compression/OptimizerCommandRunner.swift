@@ -46,6 +46,15 @@ struct OptimizerCommand {
     }
 }
 
+struct ConversionCommand {
+    let tool: OptimizerTool
+    let arguments: (_ input: URL, _ output: URL, _ mode: CompressionMode, _ videoMode: VideoCompressionMode?) -> [String]
+
+    var name: String {
+        tool.displayName
+    }
+}
+
 struct OptimizerToolLocator {
     func executable(for tool: OptimizerTool) -> URL? {
         findExecutable(named: tool.executableNames)
@@ -88,6 +97,34 @@ struct OptimizerCommandRunner {
         let process = Process()
         process.executableURL = executable
         process.arguments = command.arguments(input, output, mode)
+
+        let pipe = Pipe()
+        pipe.fileHandleForReading.readabilityHandler = { handle in
+            _ = handle.availableData
+        }
+        process.standardOutput = pipe
+        process.standardError = pipe
+        defer {
+            pipe.fileHandleForReading.readabilityHandler = nil
+        }
+
+        try await runAndWaitForProcessTermination(process)
+
+        guard process.terminationStatus == 0, FileManager.default.fileExists(atPath: output.path) else {
+            return nil
+        }
+
+        return output
+    }
+
+    func run(_ command: ConversionCommand, input: URL, output: URL, mode: CompressionMode, videoMode: VideoCompressionMode?) async throws -> URL? {
+        guard let executable = locator.executable(for: command.tool) else {
+            return nil
+        }
+
+        let process = Process()
+        process.executableURL = executable
+        process.arguments = command.arguments(input, output, mode, videoMode)
 
         let pipe = Pipe()
         pipe.fileHandleForReading.readabilityHandler = { handle in

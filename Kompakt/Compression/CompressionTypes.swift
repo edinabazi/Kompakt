@@ -96,6 +96,104 @@ enum FileFormat: String {
             .video
         }
     }
+
+    var displayName: String {
+        switch self {
+        case .jpeg:
+            "JPG"
+        default:
+            rawValue.uppercased()
+        }
+    }
+}
+
+enum ProcessingOperation: Equatable {
+    case compress
+    case convert(FileFormat)
+
+    var isConversion: Bool {
+        if case .convert = self { return true }
+        return false
+    }
+
+    var targetFormat: FileFormat? {
+        if case .convert(let format) = self { return format }
+        return nil
+    }
+}
+
+enum ConversionCatalog {
+    static func targetFormats(from source: FileFormat) -> [FileFormat] {
+        switch source {
+        case .png:
+            [.jpeg, .webp]
+        case .jpeg:
+            [.png, .webp]
+        case .webp:
+            [.png, .jpeg]
+        case .mov, .m4v:
+            [.mp4]
+        case .gif, .svg, .mp4:
+            []
+        }
+    }
+
+    static func targetFormats(fromSources sources: [FileFormat]) -> [FileFormat] {
+        guard let first = sources.first else { return [] }
+        let remainingTargets = sources.dropFirst().map { Set(targetFormats(from: $0)) }
+
+        return targetFormats(from: first).filter { target in
+            remainingTargets.allSatisfy { $0.contains(target) }
+        }
+    }
+
+    static func targetFormats(fromFileHintExtensions urls: [URL]) -> [FileFormat] {
+        guard !urls.isEmpty else { return [] }
+
+        for url in urls {
+            var isDirectory: ObjCBool = false
+            if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory), isDirectory.boolValue {
+                return []
+            }
+        }
+
+        let detectedFormats = urls.compactMap { FileFormat.fromFileExtension($0.pathExtension) }
+        guard detectedFormats.count == urls.count else { return [] }
+        return targetFormats(fromSources: detectedFormats)
+    }
+
+    static func targetFormats(fromCollectedFiles urls: [URL]) -> [FileFormat] {
+        guard !urls.isEmpty else { return [] }
+        let detectedFormats = urls.compactMap(FileFormatDetector.detect)
+        guard detectedFormats.count == urls.count else { return [] }
+        return targetFormats(fromSources: detectedFormats)
+    }
+
+    static func sourceFormat(fromFileHintExtensions urls: [URL]) -> FileFormat? {
+        guard !urls.isEmpty else { return nil }
+
+        for url in urls {
+            var isDirectory: ObjCBool = false
+            if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory), isDirectory.boolValue {
+                return nil
+            }
+        }
+
+        let detectedFormats = urls.compactMap { FileFormat.fromFileExtension($0.pathExtension) }
+        guard detectedFormats.count == urls.count else { return nil }
+        let formats = Set(detectedFormats)
+        guard formats.count == 1, let format = formats.first else { return nil }
+        return targetFormats(from: format).isEmpty ? nil : format
+    }
+
+    static func sourceFormat(fromCollectedFiles urls: [URL]) -> FileFormat? {
+        guard !urls.isEmpty else { return nil }
+        let detectedFormats = urls.compactMap(FileFormatDetector.detect)
+        guard detectedFormats.count == urls.count else { return nil }
+        let formats = Set(detectedFormats)
+        guard formats.count == 1, let format = formats.first else { return nil }
+        return targetFormats(from: format).isEmpty ? nil : format
+    }
 }
 
 enum OptimizableFileKind: Equatable {
@@ -207,15 +305,24 @@ enum CompressionStatus: Equatable {
         }
     }
 
-    var message: String {
+    func message(for operation: ProcessingOperation) -> String {
         switch self {
         case .queued: "Waiting."
-        case .running: "Kompakting..."
+        case .running: operation.isConversion ? "Konverting..." : "Kompakting..."
         case .skipped(let reason): reason
-        case .finished: "Kompakted."
+        case .finished:
+            if case .convert(let format) = operation {
+                "Konverted to \(format.displayName)."
+            } else {
+                "Kompakted."
+            }
         case .reverted: "Reverted."
         case .failed(let reason): reason
         }
+    }
+
+    var message: String {
+        message(for: .compress)
     }
 }
 
@@ -243,6 +350,8 @@ struct CompressionBatchSummary: Equatable {
     let totalCount: Int
     let percentSmallerText: String
     let sizeChangeText: String
+    let isConversion: Bool
+    let targetFormat: FileFormat?
 
     var bytesSaved: Int64 {
         max(0, originalSize - compressedSize)
@@ -262,14 +371,21 @@ struct CompressionBatchSummary: Equatable {
         let savingsRatio = originalSize > 0 ? Double(bytesSaved) / Double(originalSize) : 0
         let original = ByteCountFormatter.string(fromByteCount: originalSize, countStyle: .file)
         let compressed = ByteCountFormatter.string(fromByteCount: compressedSize, countStyle: .file)
+        let conversionTargets = Set(jobs.compactMap(\.operation.targetFormat))
+        let conversionTarget = conversionTargets.count == 1 ? conversionTargets.first : nil
+        let isConversion = conversionTarget != nil
 
         return CompressionBatchSummary(
             originalSize: originalSize,
             compressedSize: compressedSize,
             optimizedCount: results.count,
             totalCount: jobs.count,
-            percentSmallerText: "\(Int((savingsRatio * 100).rounded()))% smaller",
-            sizeChangeText: "\(original) -> \(compressed)"
+            percentSmallerText: isConversion
+                ? "Konverted to \(conversionTarget?.displayName ?? "file")"
+                : "\(Int((savingsRatio * 100).rounded()))% smaller",
+            sizeChangeText: "\(original) -> \(compressed)",
+            isConversion: isConversion,
+            targetFormat: conversionTarget
         )
     }
 }
@@ -281,11 +397,28 @@ struct CompressionJob: Identifiable, Equatable {
     let mode: CompressionMode
     let videoMode: VideoCompressionMode?
     let outputMode: OutputMode
+    let operation: ProcessingOperation
     var format: FileFormat?
     var status: CompressionStatus = .queued
     var result: CompressionResult?
 
     var displayName: String {
         url.lastPathComponent
+    }
+
+    init(
+        batchID: UUID,
+        url: URL,
+        mode: CompressionMode,
+        videoMode: VideoCompressionMode?,
+        outputMode: OutputMode,
+        operation: ProcessingOperation = .compress
+    ) {
+        self.batchID = batchID
+        self.url = url
+        self.mode = mode
+        self.videoMode = videoMode
+        self.outputMode = operation.isConversion ? .createCopies : outputMode
+        self.operation = operation
     }
 }
