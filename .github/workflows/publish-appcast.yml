@@ -1,0 +1,99 @@
+name: Publish Appcast
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Release tag to publish"
+        required: true
+        default: "v1.1.0"
+      build_version:
+        description: "CFBundleVersion to add to the appcast"
+        required: true
+        default: "7"
+      release_note:
+        description: "Single release note line"
+        required: true
+        default: "Added support for converting media files"
+
+permissions:
+  contents: write
+
+jobs:
+  publish-appcast:
+    name: Publish Sparkle appcast
+    runs-on: macos-26
+    timeout-minutes: 10
+
+    env:
+      APP_NAME: Kompakt
+      PROJECT_PATH: Kompakt.xcodeproj
+      SCHEME: Kompakt
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Resolve Sparkle tools
+        run: xcodebuild -resolvePackageDependencies -project "$PROJECT_PATH" -scheme "$SCHEME"
+
+      - name: Publish Sparkle appcast
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SPARKLE_PRIVATE_ED_KEY: ${{ secrets.SPARKLE_PRIVATE_ED_KEY }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          BUILD_VERSION: ${{ inputs.build_version }}
+          RELEASE_NOTE: ${{ inputs.release_note }}
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git ls-remote --exit-code --heads origin gh-pages >/dev/null 2>&1; then
+            git fetch origin gh-pages
+            git worktree add build/pages origin/gh-pages
+          else
+            mkdir -p build/pages
+            git worktree add --detach build/pages
+          fi
+
+          versioned_zip="$APP_NAME-$RELEASE_TAG.zip"
+          gh release download "$RELEASE_TAG" --pattern "$versioned_zip" --dir build
+          cp "build/$versioned_zip" "build/pages/$versioned_zip"
+          printf '# %s %s\n\n- %s\n' "$APP_NAME" "$RELEASE_TAG" "$RELEASE_NOTE" > "build/pages/$APP_NAME-$RELEASE_TAG.md"
+
+          generate_appcast="$(find "$HOME/Library/Developer/Xcode/DerivedData" -path '*/SourcePackages/artifacts/sparkle/Sparkle/bin/generate_appcast' -type f | head -n 1)"
+          test -x "$generate_appcast"
+
+          GENERATE_APPCAST="$generate_appcast" python3 - <<'PY'
+          import os
+          import subprocess
+
+          command = [
+              os.environ["GENERATE_APPCAST"],
+              "--ed-key-file", "-",
+              "--download-url-prefix", f"https://github.com/edinabazi/Kompakt/releases/download/{os.environ['RELEASE_TAG']}/",
+              "--link", "https://github.com/edinabazi/Kompakt",
+              "--versions", os.environ["BUILD_VERSION"],
+              "--maximum-deltas", "0",
+              "build/pages",
+          ]
+          subprocess.run(
+              command,
+              input=os.environ["SPARKLE_PRIVATE_ED_KEY"] + "\n",
+              text=True,
+              check=True,
+              timeout=300,
+          )
+          PY
+
+          cd build/pages
+          rm -f "$versioned_zip"
+          git checkout -B gh-pages
+          git add .
+          git commit -m "Update Sparkle appcast for ${RELEASE_TAG}" || {
+            echo "No appcast changes to publish"
+            exit 0
+          }
+          git push origin HEAD:gh-pages

@@ -238,7 +238,7 @@ jobs:
               "--ed-key-file", "-",
               "--download-url-prefix", f"https://github.com/edinabazi/Kompakt/releases/download/{os.environ['GITHUB_REF_NAME']}/",
               "--link", "https://github.com/edinabazi/Kompakt",
-              "--versions", "6",
+              "--maximum-versions", "6",
               "--maximum-deltas", "0",
               "build/pages",
           ]
