@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 actor CompressionQueue {
     private let runner = OptimizerCommandRunner()
     private let commandCatalog = OptimizerCommandCatalog()
+    private let conversionCatalog = ConversionCommandCatalog()
 
     func process(
         jobs: [CompressionJob],
@@ -40,6 +41,16 @@ actor CompressionQueue {
             return job
         }
 
+        switch job.operation {
+        case .compress:
+            return try await compress(job: job, format: format)
+        case .convert(let targetFormat):
+            return try await convert(job: job, sourceFormat: format, targetFormat: targetFormat)
+        }
+    }
+
+    private func compress(job: CompressionJob, format: FileFormat) async throws -> CompressionJob {
+        var job = job
         let originalSize = try fileSize(job.url)
         let tempURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("Kompakt-\(UUID().uuidString)")
@@ -64,6 +75,51 @@ actor CompressionQueue {
             backupURL: savedFile.backupURL,
             originalSize: originalSize,
             compressedSize: compressedSize,
+            toolName: candidate.toolName
+        )
+        job.status = .finished
+        return job
+    }
+
+    private func convert(job: CompressionJob, sourceFormat: FileFormat, targetFormat: FileFormat) async throws -> CompressionJob {
+        var job = job
+
+        guard ConversionCatalog.targetFormats(from: sourceFormat).contains(targetFormat) else {
+            job.status = .skipped("Konversion not available.")
+            return job
+        }
+
+        let originalSize = try fileSize(job.url)
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("Kompakt-\(UUID().uuidString)")
+            .appendingPathExtension(targetFormat.fileExtension)
+
+        defer { try? FileManager.default.removeItem(at: tempURL) }
+
+        guard let candidate = try await conversionCandidate(
+            for: job.url,
+            sourceFormat: sourceFormat,
+            targetFormat: targetFormat,
+            mode: job.mode,
+            videoMode: job.videoMode,
+            tempURL: tempURL
+        ) else {
+            job.status = .skipped("No konverter available.")
+            return job
+        }
+
+        let convertedSize = try fileSize(candidate.url)
+        guard convertedSize > 0 else {
+            job.status = .skipped("Konversion failed.")
+            return job
+        }
+
+        let savedFile = try saveConverted(candidate: candidate.url, original: job.url, targetFormat: targetFormat)
+        job.result = CompressionResult(
+            outputURL: savedFile.outputURL,
+            backupURL: nil,
+            originalSize: originalSize,
+            compressedSize: convertedSize,
             toolName: candidate.toolName
         )
         job.status = .finished
@@ -106,6 +162,69 @@ actor CompressionQueue {
         return CGImageDestinationFinalize(destination) ? output : nil
     }
 
+    private func conversionCandidate(
+        for input: URL,
+        sourceFormat: FileFormat,
+        targetFormat: FileFormat,
+        mode: CompressionMode,
+        videoMode: VideoCompressionMode?,
+        tempURL: URL
+    ) async throws -> (url: URL, toolName: String)? {
+        if let command = conversionCatalog.command(from: sourceFormat, to: targetFormat),
+           let output = try await runner.run(command, input: input, output: tempURL, mode: mode, videoMode: videoMode) {
+            return (output, command.name)
+        }
+
+        if let output = try convertWithImageIO(input: input, output: tempURL, targetFormat: targetFormat, mode: mode) {
+            return (output, "ImageIO")
+        }
+
+        return nil
+    }
+
+    private func convertWithImageIO(input: URL, output: URL, targetFormat: FileFormat, mode: CompressionMode) throws -> URL? {
+        guard targetFormat == .jpeg || targetFormat == .png else { return nil }
+        guard let source = CGImageSourceCreateWithURL(input as CFURL, nil),
+              let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+            return nil
+        }
+
+        let type = targetFormat == .jpeg ? UTType.jpeg.identifier : UTType.png.identifier
+        guard let destination = CGImageDestinationCreateWithURL(output as CFURL, type as CFString, 1, nil) else {
+            return nil
+        }
+
+        let outputImage = targetFormat == .jpeg ? imageByFlatteningTransparency(image) : image
+        let properties: [CFString: Any] = targetFormat == .jpeg
+            ? [kCGImageDestinationLossyCompressionQuality: mode == .lossless ? 1.0 : 0.82]
+            : [:]
+
+        CGImageDestinationAddImage(destination, outputImage, properties as CFDictionary)
+        return CGImageDestinationFinalize(destination) ? output : nil
+    }
+
+    private func imageByFlatteningTransparency(_ image: CGImage) -> CGImage {
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let bitmapInfo = CGImageAlphaInfo.noneSkipLast.rawValue
+        guard let context = CGContext(
+            data: nil,
+            width: image.width,
+            height: image.height,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: colorSpace,
+            bitmapInfo: bitmapInfo
+        ) else {
+            return image
+        }
+
+        let rect = CGRect(x: 0, y: 0, width: image.width, height: image.height)
+        context.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
+        context.fill(rect)
+        context.draw(image, in: rect)
+        return context.makeImage() ?? image
+    }
+
     private func save(candidate: URL, original: URL, format: FileFormat, outputMode: OutputMode) throws -> SavedFile {
         switch outputMode {
         case .createCopies:
@@ -130,6 +249,12 @@ actor CompressionQueue {
 
             return SavedFile(outputURL: original, backupURL: backupURL)
         }
+    }
+
+    private func saveConverted(candidate: URL, original: URL, targetFormat: FileFormat) throws -> SavedFile {
+        let destination = availableConvertedURL(for: original, targetFormat: targetFormat)
+        try FileManager.default.copyItem(at: candidate, to: destination)
+        return SavedFile(outputURL: destination, backupURL: nil)
     }
 
     private func availableBackupURL(for original: URL) -> URL {
@@ -161,6 +286,32 @@ actor CompressionQueue {
 
         while FileManager.default.fileExists(atPath: candidate.path) {
             candidate = directory.appendingPathComponent("\(baseName)-kompakt-\(counter)").appendingPathExtension(ext)
+            counter += 1
+        }
+
+        return candidate
+    }
+
+    private func availableConvertedURL(for original: URL, targetFormat: FileFormat) -> URL {
+        let directory = original.deletingLastPathComponent()
+        let baseName = original.deletingPathExtension().lastPathComponent
+        let defaultCandidate = directory
+            .appendingPathComponent(baseName)
+            .appendingPathExtension(targetFormat.fileExtension)
+
+        guard FileManager.default.fileExists(atPath: defaultCandidate.path) else {
+            return defaultCandidate
+        }
+
+        var candidate = directory
+            .appendingPathComponent("\(baseName)-kompakt")
+            .appendingPathExtension(targetFormat.fileExtension)
+        var counter = 2
+
+        while FileManager.default.fileExists(atPath: candidate.path) {
+            candidate = directory
+                .appendingPathComponent("\(baseName)-kompakt-\(counter)")
+                .appendingPathExtension(targetFormat.fileExtension)
             counter += 1
         }
 
@@ -327,6 +478,84 @@ struct OptimizerCommandCatalog {
                     copiesInputFirst: false
                 )
             ]
+        }
+    }
+}
+
+struct ConversionCommandCatalog {
+    func command(from source: FileFormat, to target: FileFormat) -> ConversionCommand? {
+        switch (source, target) {
+        case (.png, .webp), (.jpeg, .webp):
+            return ConversionCommand(
+                tool: .cwebp,
+                arguments: { input, output, mode, _ in
+                    if mode == .lossless {
+                        return [
+                            "-quiet",
+                            "-mt",
+                            "-lossless",
+                            "-z", "9",
+                            "-metadata", "none",
+                            input.path,
+                            "-o", output.path
+                        ]
+                    }
+
+                    return [
+                        "-quiet",
+                        "-mt",
+                        "-m", "6",
+                        "-q", "82",
+                        "-alpha_q", "90",
+                        "-metadata", "none",
+                        input.path,
+                        "-o", output.path
+                    ]
+                }
+            )
+        case (.mov, .mp4), (.m4v, .mp4):
+            return ConversionCommand(
+                tool: .ffmpeg,
+                arguments: { input, output, mode, videoMode in
+                    if mode == .lossless {
+                        return [
+                            "-y", "-i", input.path,
+                            "-map", "0",
+                            "-c", "copy",
+                            "-map_metadata", "-1",
+                            "-movflags", "+faststart",
+                            output.path
+                        ]
+                    }
+
+                    let selectedVideoMode = videoMode ?? .sameResolution
+                    var args = [
+                        "-y", "-i", input.path,
+                        "-map", "0:v:0",
+                        "-map", "0:a?",
+                        "-c:v", "libx264",
+                        "-preset", "medium",
+                        "-crf", "25",
+                        "-pix_fmt", "yuv420p",
+                        "-c:a", "aac",
+                        "-b:a", "128k",
+                        "-map_metadata", "-1"
+                    ]
+
+                    if let maxHeight = selectedVideoMode.maxHeight {
+                        args.append(contentsOf: ["-vf", "scale=-2:min(ih\\,\(maxHeight))"])
+                    }
+
+                    args.append(contentsOf: [
+                        "-movflags", "+faststart",
+                        output.path
+                    ])
+
+                    return args
+                }
+            )
+        default:
+            return nil
         }
     }
 }

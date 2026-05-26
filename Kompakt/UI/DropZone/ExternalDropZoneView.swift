@@ -13,6 +13,8 @@ struct ExternalDropZoneView: View {
     @State private var dragLocation: CGPoint?
     @State private var phase: DropZonePhase = .idle
     @State private var pendingURLs: [URL] = []
+    @State private var pendingConversionTargets: [FileFormat] = []
+    @State private var isConversionFlow = false
     @State private var previewURLs: [URL] = []
     @State private var previewTotalCount = 0
     @State private var fileSummary = OptimizableFileSummary.fallback
@@ -43,17 +45,25 @@ struct ExternalDropZoneView: View {
                 )
                 .ignoresSafeArea()
 
-                if isTargeted && phase.acceptsDrops {
-                    HoverColorBloomView()
-                        .ignoresSafeArea()
-                }
+                hoverGlowLayer
             }
 
-            centerContent
-                .padding(.leading, effectLeadingGutter)
+            dropZoneContentLayer
+
+            if showsConversionDropArea {
+                conversionDropArea
+                    .padding(.leading, effectLeadingGutter)
+            }
+
+            centeredEscapeHintLayer
 
             if phase.acceptsDrops {
-                DropReceiverView(isTargeted: $isTargeted, dragLocation: $dragLocation, onDrop: loadDroppedURLs)
+                DropReceiverView(
+                    isTargeted: $isTargeted,
+                    dragLocation: $dragLocation,
+                    allowsConversion: showsConversionDropArea,
+                    onDrop: loadDroppedURLs
+                )
                     .ignoresSafeArea()
             }
         }
@@ -64,12 +74,57 @@ struct ExternalDropZoneView: View {
     }
 
     @ViewBuilder
+    private var centeredEscapeHintLayer: some View {
+        if showEscapeHint && phase.acceptsDrops && mode == .drag {
+            escapeHint
+                .opacity(isTargeted ? 0 : 1)
+                .animation(.easeInOut(duration: 0.15), value: isTargeted)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                .padding(.leading, effectLeadingGutter)
+                .allowsHitTesting(false)
+        }
+    }
+
+    @ViewBuilder
+    private var hoverGlowLayer: some View {
+        if isTargeted && phase.acceptsDrops {
+            if showsConversionDropArea {
+                GeometryReader { proxy in
+                    HoverColorBloomView()
+                        .frame(width: proxy.size.width, height: max(96, proxy.size.height * 0.5))
+                        .clipped()
+                        .frame(width: proxy.size.width, height: proxy.size.height, alignment: isHoveringConversionArea ? .bottom : .top)
+                }
+                .ignoresSafeArea()
+            } else {
+                HoverColorBloomView()
+                    .ignoresSafeArea()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var dropZoneContentLayer: some View {
+        if showsConversionDropArea {
+            GeometryReader { proxy in
+                centerContent
+                    .frame(width: proxy.size.width, height: max(96, proxy.size.height * 0.5), alignment: .center)
+                    .frame(width: proxy.size.width, height: proxy.size.height, alignment: .top)
+            }
+            .padding(.leading, effectLeadingGutter)
+        } else {
+            centerContent
+                .padding(.leading, effectLeadingGutter)
+        }
+    }
+
+    @ViewBuilder
     private var centerContent: some View {
-        if case .choosing(let summary) = phase {
+        if let summary = phase.choiceSummary {
             VStack(spacing: 14) {
                 FilePreviewStack(urls: previewURLs, totalCount: summary.count)
 
-                Text(summary.kind == .video ? "Choose video size" : "Choose optimization")
+                Text(phase.chooseTitle(summary: summary))
                     .font(.system(size: 16, weight: .semibold))
                     .tracking(-0.64)
 
@@ -78,7 +133,13 @@ struct ExternalDropZoneView: View {
                     .foregroundStyle(.white.opacity(0.62))
 
                 Group {
-                    if summary.kind == .video {
+                    if case .choosingConversion = phase {
+                        HStack(spacing: 10) {
+                            ForEach(pendingConversionTargets, id: \.self) { format in
+                                conversionChoiceButton(format)
+                            }
+                        }
+                    } else if summary.kind == .video {
                         VStack(spacing: 8) {
                             videoChoiceButton(.sameResolution)
                             HStack(spacing: 8) {
@@ -129,14 +190,68 @@ struct ExternalDropZoneView: View {
                 titleView
                     .scaleEffect(phase.textScale(isTargeted: isTargeted))
                     .blur(radius: phase.textBlur)
-                    .modifier(HoverTextMagnet(isActive: isTargeted && phase.acceptsDrops, dragLocation: dragLocation))
+                    .modifier(HoverTextMagnet(isActive: isCompressionMagnetActive, dragLocation: localDragLocation(for: .compress)))
 
-                if showEscapeHint {
-                    escapeHint
-                }
             }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-                .transition(.opacity.combined(with: .scale(scale: 0.98)))
+        }
+    }
+
+    private var showsConversionDropArea: Bool {
+        phase.acceptsDrops
+            && mode == .drag
+            && !appModel.externalDragConversionTargets.isEmpty
+    }
+
+    private var conversionDropArea: some View {
+        GeometryReader { proxy in
+            VStack {
+                Spacer()
+                Text(conversionDropAreaTitle)
+                    .font(.system(size: 16, weight: .medium))
+                    .tracking(-0.64)
+                    .foregroundStyle(.white.opacity(isHoveringConversionArea ? 1 : 0.88))
+                    .modifier(HoverTextMagnet(isActive: isHoveringConversionArea, dragLocation: localDragLocation(for: .convert)))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: max(96, proxy.size.height * 0.5))
+            }
+            .frame(width: proxy.size.width, height: proxy.size.height)
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+    }
+
+    private var conversionDropAreaTitle: String {
+        if appModel.externalDragConversionTargets.count == 1,
+           let format = appModel.externalDragConversionTargets.first {
+            return "Konvert to \(format.displayName)"
+        }
+
+        return "Konvert \(appModel.externalDragSummary.noun)"
+    }
+
+    private var isHoveringConversionArea: Bool {
+        guard showsConversionDropArea, let dragLocation else { return false }
+        return dragLocation.y >= DropZoneDropAction.conversionBoundaryY
+    }
+
+    private var isCompressionMagnetActive: Bool {
+        guard isTargeted && phase.acceptsDrops else { return false }
+        return !showsConversionDropArea || !isHoveringConversionArea
+    }
+
+    private func localDragLocation(for action: DropZoneDropAction) -> CGPoint? {
+        guard showsConversionDropArea, let dragLocation else {
+            return dragLocation
+        }
+
+        switch action {
+        case .compress:
+            guard dragLocation.y < DropZoneDropAction.conversionBoundaryY else { return nil }
+            return CGPoint(x: dragLocation.x, y: (dragLocation.y * 2) + 1)
+        case .convert:
+            guard dragLocation.y >= DropZoneDropAction.conversionBoundaryY else { return nil }
+            return CGPoint(x: dragLocation.x, y: (dragLocation.y * 2) - 1)
         }
     }
 
@@ -166,16 +281,18 @@ struct ExternalDropZoneView: View {
             .scaleEffect(isTargeted ? 1.03 : 1)
 
             VStack(spacing: 8) {
-                escapeHint
+                if showEscapeHint {
+                    escapeHint
+                }
 
-                Text("Next time, just drag an image\nand Kompakt will be ready.")
+                Text("Next time, just drag a media file\nand Kompakt will be ready.")
                     .font(.system(size: 12, weight: .medium))
                     .tracking(-0.2)
                     .foregroundStyle(.white.opacity(0.54))
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(.top, 12)
+            .padding(.top, 20)
         }
         .frame(maxWidth: 310)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
@@ -185,7 +302,7 @@ struct ExternalDropZoneView: View {
     @ViewBuilder
     private var titleView: some View {
         if phase == .processing {
-            ThinkingText(phase.title(summary: effectiveSummary))
+            ThinkingText(isConversionFlow ? "Konverting \(effectiveSummary.noun)" : phase.title(summary: effectiveSummary))
         } else {
             Text(phase.title(summary: effectiveSummary))
                 .font(.system(size: 16, weight: .medium))
@@ -281,12 +398,30 @@ struct ExternalDropZoneView: View {
         .buttonStyle(.plain)
     }
 
-    private func loadDroppedURLs(_ urls: [URL]) {
+    private func conversionChoiceButton(_ format: FileFormat) -> some View {
+        Button {
+            startPendingConversion(targetFormat: format)
+        } label: {
+            Text(format.displayName)
+                .font(.system(size: 13, weight: .semibold))
+                .tracking(-0.26)
+                .frame(width: 92, height: 34)
+                .background(.white.opacity(0.14), in: RoundedRectangle(cornerRadius: 8))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(.white.opacity(0.22), lineWidth: 1)
+                }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func loadDroppedURLs(_ urls: [URL], action: DropZoneDropAction) {
         if mode == .onboarding {
             appModel.finishFirstLaunchOnboarding()
         }
 
         fileSummary = OptimizableFileSummary.fromFileHintExtensions(urls)
+        isConversionFlow = action == .convert
         phase = .processing
         appModel.endExternalDrag(didDrop: true)
 
@@ -295,12 +430,12 @@ struct ExternalDropZoneView: View {
             let summary = await OptimizableFileSummary.fromCollectedFilesAsync(fileURLs)
 
             await MainActor.run {
-                finishLoadingDroppedFiles(fileURLs, summary: summary)
+                finishLoadingDroppedFiles(fileURLs, summary: summary, action: action)
             }
         }
     }
 
-    private func finishLoadingDroppedFiles(_ fileURLs: [URL], summary: OptimizableFileSummary) {
+    private func finishLoadingDroppedFiles(_ fileURLs: [URL], summary: OptimizableFileSummary, action: DropZoneDropAction) {
         guard !fileURLs.isEmpty else {
             previewURLs = []
             previewTotalCount = 0
@@ -313,6 +448,27 @@ struct ExternalDropZoneView: View {
         previewTotalCount = fileURLs.count
         fileSummary = summary
 
+        if action == .convert {
+            let targets = ConversionCatalog.targetFormats(fromCollectedFiles: fileURLs)
+            guard !targets.isEmpty else {
+                completeAndDismiss()
+                return
+            }
+
+            if targets.count == 1, let target = targets.first {
+                isConversionFlow = true
+                phase = .processing
+                appModel.startConversion(urls: fileURLs, targetFormat: target, onFinished: completeAndDismiss)
+            } else {
+                pendingURLs = fileURLs
+                pendingConversionTargets = targets
+                isConversionFlow = true
+                phase = .choosingConversion(fileSummary)
+            }
+            return
+        }
+
+        isConversionFlow = false
         if appModel.compressionMode == .ask {
             pendingURLs = fileURLs
             phase = .choosing(fileSummary)
@@ -333,6 +489,7 @@ struct ExternalDropZoneView: View {
         }
 
         phase = .processing
+        isConversionFlow = false
         appModel.start(urls: urls, mode: mode, onFinished: completeAndDismiss)
     }
 
@@ -346,12 +503,30 @@ struct ExternalDropZoneView: View {
         }
 
         phase = .processing
+        isConversionFlow = false
         appModel.start(urls: urls, mode: .smaller, videoMode: videoMode, onFinished: completeAndDismiss)
+    }
+
+    private func startPendingConversion(targetFormat: FileFormat) {
+        let urls = pendingURLs
+        pendingURLs = []
+        pendingConversionTargets = []
+
+        guard !urls.isEmpty else {
+            completeAndDismiss()
+            return
+        }
+
+        phase = .processing
+        isConversionFlow = true
+        appModel.startConversion(urls: urls, targetFormat: targetFormat, onFinished: completeAndDismiss)
     }
 
     private func cancelChoosing() {
         guard phase.isChoosing else { return }
         pendingURLs = []
+        pendingConversionTargets = []
+        isConversionFlow = false
         previewURLs = []
         previewTotalCount = 0
         fileSummary = .fallback
@@ -361,6 +536,7 @@ struct ExternalDropZoneView: View {
 
     private func completeAndDismiss(_ summary: CompressionBatchSummary? = nil) {
         pendingURLs = []
+        pendingConversionTargets = []
         completionSummary = summary
         phase = .finished
         DispatchQueue.main.asyncAfter(deadline: .now() + (summary == nil ? 0.85 : 1.65)) {
@@ -377,19 +553,33 @@ private enum DropZonePhase: Equatable {
     case idle
     case accepted
     case choosing(OptimizableFileSummary)
+    case choosingConversion(OptimizableFileSummary)
     case processing
     case finished
 
     var isChoosing: Bool {
-        if case .choosing = self { return true }
-        return false
+        switch self {
+        case .choosing, .choosingConversion:
+            true
+        default:
+            false
+        }
+    }
+
+    var choiceSummary: OptimizableFileSummary? {
+        switch self {
+        case .choosing(let summary), .choosingConversion(let summary):
+            summary
+        default:
+            nil
+        }
     }
 
     var showsPreview: Bool {
         switch self {
         case .accepted, .processing, .finished:
             true
-        case .idle, .choosing:
+        case .idle, .choosing, .choosingConversion:
             false
         }
     }
@@ -398,7 +588,7 @@ private enum DropZonePhase: Equatable {
         switch self {
         case .idle, .accepted:
             true
-        case .choosing, .processing, .finished:
+        case .choosing, .choosingConversion, .processing, .finished:
             false
         }
     }
@@ -408,8 +598,18 @@ private enum DropZonePhase: Equatable {
         case .idle: "Kompakt \(summary.noun)"
         case .accepted: "Drop received"
         case .choosing: "Choose optimization"
+        case .choosingConversion: "Choose format"
         case .processing: "Kompakting \(summary.noun)"
         case .finished: "Kompakted \(summary.noun)"
+        }
+    }
+
+    func chooseTitle(summary: OptimizableFileSummary) -> String {
+        switch self {
+        case .choosingConversion:
+            "Choose format"
+        default:
+            summary.kind == .video ? "Choose video size" : "Choose optimization"
         }
     }
 
@@ -667,12 +867,14 @@ private enum PreviewLoader {
 private struct DropReceiverView: NSViewRepresentable {
     @Binding var isTargeted: Bool
     @Binding var dragLocation: CGPoint?
-    let onDrop: ([URL]) -> Void
+    let allowsConversion: Bool
+    let onDrop: ([URL], DropZoneDropAction) -> Void
 
     func makeNSView(context: Context) -> DropReceiverNSView {
         let view = DropReceiverNSView()
         view.onTargetChanged = { isTargeted = $0 }
         view.onDragLocationChanged = { dragLocation = $0 }
+        view.allowsConversion = allowsConversion
         view.onDrop = onDrop
         return view
     }
@@ -680,17 +882,37 @@ private struct DropReceiverView: NSViewRepresentable {
     func updateNSView(_ nsView: DropReceiverNSView, context: Context) {
         nsView.onTargetChanged = { isTargeted = $0 }
         nsView.onDragLocationChanged = { dragLocation = $0 }
+        nsView.allowsConversion = allowsConversion
         nsView.onDrop = onDrop
+    }
+}
+
+enum DropZoneDropAction: Equatable {
+    static let conversionBoundaryY: CGFloat = 0
+
+    case compress
+    case convert
+
+    static func action(forNormalizedY y: CGFloat?, allowsConversion: Bool) -> DropZoneDropAction {
+        guard allowsConversion,
+              let y,
+              y >= conversionBoundaryY else {
+            return .compress
+        }
+
+        return .convert
     }
 }
 
 private final class DropReceiverNSView: NSView {
     var onTargetChanged: ((Bool) -> Void)?
     var onDragLocationChanged: ((CGPoint?) -> Void)?
-    var onDrop: (([URL]) -> Void)?
+    var onDrop: (([URL], DropZoneDropAction) -> Void)?
+    var allowsConversion = false
     private var isTargeted = false
     private var acceptsCurrentDrag = false
     private var lastDragLocation: CGPoint?
+    private var lastHoveredDropAction: DropZoneDropAction?
     private let dragLocationThreshold: CGFloat = 0.05
 
     override init(frame frameRect: NSRect) {
@@ -731,12 +953,13 @@ private final class DropReceiverNSView: NSView {
 
     override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
         let urls = supportedURLs(from: sender)
+        let action = dropAction()
         acceptsCurrentDrag = false
         updateTargetState(false)
         updateDragLocation(nil, force: true)
 
         guard !urls.isEmpty else { return false }
-        onDrop?(urls)
+        onDrop?(urls, action)
         return true
     }
 
@@ -751,7 +974,7 @@ private final class DropReceiverNSView: NSView {
         self.isTargeted = isTargeted
         onTargetChanged?(isTargeted)
 
-        if isTargeted {
+        if isTargeted && !allowsConversion {
             NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
         }
     }
@@ -774,13 +997,39 @@ private final class DropReceiverNSView: NSView {
         )
     }
 
+    private func dropAction() -> DropZoneDropAction {
+        DropZoneDropAction.action(forNormalizedY: lastDragLocation?.y, allowsConversion: allowsConversion)
+    }
+
     private func updateDragLocation(_ location: CGPoint?, force: Bool = false) {
-        guard force || shouldPublish(location) else { return }
+        let previousAction = lastHoveredDropAction
+        let currentAction = hoveredDropAction(for: location)
+        updateHoveredDropAction(currentAction)
+
+        guard force || shouldPublish(location, previousAction: previousAction, currentAction: currentAction) else { return }
         lastDragLocation = location
         onDragLocationChanged?(location)
     }
 
-    private func shouldPublish(_ location: CGPoint?) -> Bool {
+    private func hoveredDropAction(for location: CGPoint?) -> DropZoneDropAction? {
+        guard allowsConversion, acceptsCurrentDrag, let location else { return nil }
+        return DropZoneDropAction.action(forNormalizedY: location.y, allowsConversion: true)
+    }
+
+    private func updateHoveredDropAction(_ action: DropZoneDropAction?) {
+        guard lastHoveredDropAction != action else { return }
+        lastHoveredDropAction = action
+
+        if action != nil {
+            NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
+        }
+    }
+
+    private func shouldPublish(_ location: CGPoint?, previousAction: DropZoneDropAction?, currentAction: DropZoneDropAction?) -> Bool {
+        if previousAction != currentAction {
+            return true
+        }
+
         guard let location else {
             return lastDragLocation != nil
         }

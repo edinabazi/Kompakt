@@ -127,6 +127,164 @@ struct KompaktTests {
         #expect(catalog.commands(for: .mp4, mode: .smaller, videoMode: .downscale720).map(\.tool) == [.ffmpeg])
     }
 
+    @Test func conversionCatalogDefinesV1Matrix() {
+        #expect(ConversionCatalog.targetFormats(from: .png) == [.jpeg, .webp])
+        #expect(ConversionCatalog.targetFormats(from: .jpeg) == [.png, .webp])
+        #expect(ConversionCatalog.targetFormats(from: .webp) == [.png, .jpeg])
+        #expect(ConversionCatalog.targetFormats(from: .mov) == [.mp4])
+        #expect(ConversionCatalog.targetFormats(from: .m4v) == [.mp4])
+        #expect(ConversionCatalog.targetFormats(from: .gif).isEmpty)
+        #expect(ConversionCatalog.targetFormats(from: .svg).isEmpty)
+        #expect(ConversionCatalog.targetFormats(from: .mp4).isEmpty)
+    }
+
+    @Test func conversionCatalogFindsCommonTargetsForCompatibleBatches() throws {
+        let directory = try temporaryDirectory()
+        let png = try write([0x00], named: "image.png", in: directory)
+        let jpeg = try write([0x00], named: "photo.jpg", in: directory)
+        let webp = try write([0x00], named: "picture.webp", in: directory)
+        let gif = try write([0x00], named: "loop.gif", in: directory)
+        let folder = directory.appendingPathComponent("Folder", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+
+        #expect(ConversionCatalog.targetFormats(fromFileHintExtensions: [png]) == [.jpeg, .webp])
+        #expect(ConversionCatalog.targetFormats(fromFileHintExtensions: [png, jpeg]) == [.webp])
+        #expect(ConversionCatalog.targetFormats(fromFileHintExtensions: [webp, jpeg]) == [.png])
+        #expect(ConversionCatalog.targetFormats(fromFileHintExtensions: [png, webp]) == [.jpeg])
+        #expect(ConversionCatalog.targetFormats(fromFileHintExtensions: [png, jpeg, webp]).isEmpty)
+        #expect(ConversionCatalog.targetFormats(fromFileHintExtensions: [gif]).isEmpty)
+        #expect(ConversionCatalog.targetFormats(fromFileHintExtensions: [folder]).isEmpty)
+        #expect(ConversionCatalog.targetFormats(fromFileHintExtensions: [png, folder]).isEmpty)
+    }
+
+    @Test func conversionCatalogFindsCommonTargetsFromDetectedFiles() throws {
+        let directory = try temporaryDirectory()
+        let webp = try write(Array("RIFF".utf8) + [0x00, 0x00, 0x00, 0x00] + Array("WEBP".utf8), named: "picture.bin", in: directory)
+        let jpeg = try write([0xFF, 0xD8, 0xFF, 0xE0, 0x00], named: "photo.bin", in: directory)
+        let png = try write([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A], named: "image.bin", in: directory)
+
+        #expect(ConversionCatalog.targetFormats(fromCollectedFiles: [webp, jpeg]) == [.png])
+        #expect(ConversionCatalog.targetFormats(fromCollectedFiles: [png, jpeg]) == [.webp])
+        #expect(ConversionCatalog.targetFormats(fromCollectedFiles: [png, jpeg, webp]).isEmpty)
+    }
+
+    @Test func conversionCommandCatalogUsesCurrentTools() throws {
+        let catalog = ConversionCommandCatalog()
+
+        #expect(catalog.command(from: .png, to: .webp)?.tool == .cwebp)
+        #expect(catalog.command(from: .jpeg, to: .webp)?.tool == .cwebp)
+        #expect(catalog.command(from: .mov, to: .mp4)?.tool == .ffmpeg)
+        #expect(catalog.command(from: .webp, to: .jpeg) == nil)
+    }
+
+    @Test func conversionJobsForceCreateCopies() throws {
+        let directory = try temporaryDirectory()
+        let png = try write([0x00], named: "image.png", in: directory)
+        let job = CompressionJob(
+            batchID: UUID(),
+            url: png,
+            mode: .smaller,
+            videoMode: nil,
+            outputMode: .replaceOriginals,
+            operation: .convert(.jpeg)
+        )
+
+        #expect(job.outputMode == .createCopies)
+        #expect(job.operation == .convert(.jpeg))
+    }
+
+    @Test func conversionBatchSummaryDoesNotReportSavings() throws {
+        let directory = try temporaryDirectory()
+        let source = try write([0x01], named: "source.png", in: directory)
+        let output = try write([0x01, 0x02], named: "source-kompakt.jpg", in: directory)
+        var job = CompressionJob(
+            batchID: UUID(),
+            url: source,
+            mode: .smaller,
+            videoMode: nil,
+            outputMode: .createCopies,
+            operation: .convert(.jpeg)
+        )
+        job.status = .finished
+        job.result = CompressionResult(outputURL: output, backupURL: nil, originalSize: 1, compressedSize: 2, toolName: "ImageIO")
+
+        let summary = try #require(CompressionBatchSummary.from([job]))
+
+        #expect(summary.isConversion)
+        #expect(summary.targetFormat == .jpeg)
+        #expect(summary.percentSmallerText == "Konverted to JPG")
+        #expect(summary.sizeChangeText == "1 byte -> 2 bytes")
+        #expect(summary.bytesSaved == 0)
+    }
+
+    @Test func dropZoneActionUsesBottomHalfForConversion() {
+        #expect(DropZoneDropAction.action(forNormalizedY: nil, allowsConversion: true) == .compress)
+        #expect(DropZoneDropAction.action(forNormalizedY: -0.01, allowsConversion: true) == .compress)
+        #expect(DropZoneDropAction.action(forNormalizedY: 0, allowsConversion: true) == .convert)
+        #expect(DropZoneDropAction.action(forNormalizedY: 0.8, allowsConversion: false) == .compress)
+    }
+
+    @Test func imageIOConversionUsesTargetExtensionWithoutSuffixWhenAvailable() async throws {
+        let directory = try temporaryDirectory()
+        let source = directory.appendingPathComponent("sample.png")
+        try makePNG(at: source)
+
+        let queue = CompressionQueue()
+        let job = CompressionJob(
+            batchID: UUID(),
+            url: source,
+            mode: .smaller,
+            videoMode: nil,
+            outputMode: .replaceOriginals,
+            operation: .convert(.jpeg)
+        )
+        var updates: [CompressionJob] = []
+
+        await queue.process(jobs: [job]) { updatedJob in
+            updates.append(updatedJob)
+        }
+
+        let finished = try #require(updates.last)
+        let outputURL = try #require(finished.result?.outputURL)
+
+        #expect(finished.status == .finished)
+        #expect(outputURL.lastPathComponent == "sample.jpg")
+        #expect(FileManager.default.fileExists(atPath: source.path))
+        #expect(FileManager.default.fileExists(atPath: outputURL.path))
+        #expect(finished.outputMode == .createCopies)
+    }
+
+    @Test func imageIOConversionAddsKompaktSuffixOnlyWhenTargetExists() async throws {
+        let directory = try temporaryDirectory()
+        let source = directory.appendingPathComponent("sample.png")
+        try makePNG(at: source)
+        _ = try write([0x01], named: "sample.jpg", in: directory)
+        _ = try write([0x01], named: "sample-kompakt.jpg", in: directory)
+
+        let queue = CompressionQueue()
+        let job = CompressionJob(
+            batchID: UUID(),
+            url: source,
+            mode: .smaller,
+            videoMode: nil,
+            outputMode: .replaceOriginals,
+            operation: .convert(.jpeg)
+        )
+        var updates: [CompressionJob] = []
+
+        await queue.process(jobs: [job]) { updatedJob in
+            updates.append(updatedJob)
+        }
+
+        let finished = try #require(updates.last)
+        let outputURL = try #require(finished.result?.outputURL)
+
+        #expect(finished.status == .finished)
+        #expect(outputURL.lastPathComponent == "sample-kompakt-2.jpg")
+        #expect(FileManager.default.fileExists(atPath: source.path))
+        #expect(FileManager.default.fileExists(atPath: outputURL.path))
+    }
+
     @Test func toolExecutableNamesMatchBundledHelperNames() {
         #expect(OptimizerTool.mozjpeg.executableNames == ["cjpeg"])
         #expect(OptimizerTool.svgo.executableNames == ["svgo"])
@@ -202,6 +360,19 @@ struct KompaktTests {
         let item = NSPasteboardItem()
         item.setString(fileURL.absoluteString, forType: .fileURL)
         return item
+    }
+
+    private func makePNG(at url: URL) throws {
+        let image = NSImage(size: NSSize(width: 2, height: 2))
+        image.lockFocus()
+        NSColor.systemBlue.setFill()
+        NSRect(x: 0, y: 0, width: 2, height: 2).fill()
+        image.unlockFocus()
+
+        let data = try #require(image.tiffRepresentation)
+        let bitmap = try #require(NSBitmapImageRep(data: data))
+        let png = try #require(bitmap.representation(using: .png, properties: [:]))
+        try png.write(to: url)
     }
 }
 

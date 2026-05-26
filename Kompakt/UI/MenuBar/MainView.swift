@@ -515,7 +515,7 @@ struct MenuBarPopoverView: View {
 
                 PopoverDivider()
 
-                PopoverSegmentRow(title: "Output", subtitle: "Where optimized files go.") {
+                PopoverSegmentRow(title: "Output", subtitle: "Where optimized files go. Konversions always keep originals.") {
                     PopoverSegmentedControl(
                         selection: outputModeBinding,
                         options: OutputMode.allCases.map { ($0, $0.popoverTitle) }
@@ -753,7 +753,10 @@ private struct PopoverHistoryRow: View {
     }
 
     private var detailText: String {
-        guard let result = job.result else { return job.status.message }
+        guard let result = job.result else { return job.status.message(for: job.operation) }
+        if case .convert(let format) = job.operation {
+            return "Konverted to \(format.displayName) · Original kept"
+        }
         let saved = ByteCountFormatter.string(fromByteCount: result.bytesSaved, countStyle: .file)
         return "\(saved) saved · \(job.outputMode.title)"
     }
