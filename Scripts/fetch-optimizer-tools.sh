@@ -17,15 +17,33 @@ require() {
   fi
 }
 
-require brew
+require curl
+require jq
 require lipo
 require install_name_tool
+require shasum
 
 mkdir -p "$TOOLS_DIR/macos-arm64" "$TOOLS_DIR/macos-x86_64" "$TOOLS_DIR/macos-universal"
 
 fetch_bottles() {
   tag="$1"
-  brew fetch --force --bottle-tag="$tag" mozjpeg gifsicle jpegoptim optipng libpng jpeg-turbo
+  dest="$TMP_DIR/bottles/$tag"
+  mkdir -p "$dest"
+
+  for formula in mozjpeg gifsicle jpegoptim optipng libpng jpeg-turbo; do
+    metadata="$(curl --fail --silent --show-error --location "https://formulae.brew.sh/api/formula/$formula.json")"
+    url="$(printf '%s' "$metadata" | jq -er --arg tag "$tag" '.bottle.stable.files[$tag].url')"
+    sha256="$(printf '%s' "$metadata" | jq -er --arg tag "$tag" '.bottle.stable.files[$tag].sha256')"
+    token="$(curl --fail --silent --show-error --location \
+      "https://ghcr.io/token?scope=repository:homebrew/core/$formula:pull&service=ghcr.io" | jq -er '.token')"
+    bottle="$dest/$formula.tar.gz"
+
+    curl --fail --silent --show-error --location \
+      --header "Authorization: Bearer $token" \
+      "$url" \
+      --output "$bottle"
+    printf '%s  %s\n' "$sha256" "$bottle" | shasum -a 256 -c -
+  done
 }
 
 extract_bottles() {
@@ -34,7 +52,7 @@ extract_bottles() {
   mkdir -p "$dest"
 
   for formula in mozjpeg gifsicle jpegoptim optipng libpng jpeg-turbo; do
-    bottle="$(brew --cache --bottle-tag="$tag" "$formula")"
+    bottle="$TMP_DIR/bottles/$tag/$formula.tar.gz"
     tar -xzf "$bottle" -C "$dest"
   done
 }
