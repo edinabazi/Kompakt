@@ -5,8 +5,9 @@ import QuickLookThumbnailing
 import SwiftUI
 
 struct ExternalDropZoneView: View {
-    let effectLeadingGutter: CGFloat
+    let effectInnerGutter: CGFloat
     let mode: ExternalDropZoneMode
+    let side: SideSheetSide
 
     @AppStorage("showEscapeHint") private var showEscapeHint = true
     @State private var isTargeted = false
@@ -30,7 +31,7 @@ struct ExternalDropZoneView: View {
                 .ignoresSafeArea()
 
             ZStack {
-                ProgressiveBlurView()
+                ProgressiveBlurView(side: side)
                     .ignoresSafeArea()
 
                 LinearGradient(
@@ -40,8 +41,8 @@ struct ExternalDropZoneView: View {
                         .init(color: .black.opacity(0.22), location: 0.72),
                         .init(color: .black.opacity(0.48), location: 1)
                     ],
-                    startPoint: .leading,
-                    endPoint: .trailing
+                    startPoint: side.innerUnitPoint,
+                    endPoint: side.outerUnitPoint
                 )
                 .ignoresSafeArea()
 
@@ -52,7 +53,7 @@ struct ExternalDropZoneView: View {
 
             if showsConversionDropArea {
                 conversionDropArea
-                    .padding(.leading, effectLeadingGutter)
+                    .padding(side.innerPaddingEdge, effectInnerGutter)
             }
 
             centeredEscapeHintLayer
@@ -80,7 +81,7 @@ struct ExternalDropZoneView: View {
                 .opacity(isTargeted ? 0 : 1)
                 .animation(.easeInOut(duration: 0.15), value: isTargeted)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-                .padding(.leading, effectLeadingGutter)
+                .padding(side.innerPaddingEdge, effectInnerGutter)
                 .allowsHitTesting(false)
         }
     }
@@ -90,14 +91,14 @@ struct ExternalDropZoneView: View {
         if isTargeted && phase.acceptsDrops {
             if showsConversionDropArea {
                 GeometryReader { proxy in
-                    HoverColorBloomView()
+                    HoverColorBloomView(side: side)
                         .frame(width: proxy.size.width, height: max(96, proxy.size.height * 0.5))
                         .clipped()
                         .frame(width: proxy.size.width, height: proxy.size.height, alignment: isHoveringConversionArea ? .bottom : .top)
                 }
                 .ignoresSafeArea()
             } else {
-                HoverColorBloomView()
+                HoverColorBloomView(side: side)
                     .ignoresSafeArea()
             }
         }
@@ -111,10 +112,10 @@ struct ExternalDropZoneView: View {
                     .frame(width: proxy.size.width, height: max(96, proxy.size.height * 0.5), alignment: .center)
                     .frame(width: proxy.size.width, height: proxy.size.height, alignment: .top)
             }
-            .padding(.leading, effectLeadingGutter)
+            .padding(side.innerPaddingEdge, effectInnerGutter)
         } else {
             centerContent
-                .padding(.leading, effectLeadingGutter)
+                .padding(side.innerPaddingEdge, effectInnerGutter)
         }
     }
 
@@ -1044,6 +1045,7 @@ private final class DropReceiverNSView: NSView {
 }
 
 private struct HoverColorBloomView: View {
+    let side: SideSheetSide
     @State private var revealProgress = 0.0
     @State private var pulse = false
 
@@ -1061,8 +1063,8 @@ private struct HoverColorBloomView: View {
                         .init(color: .white.opacity(0.08), location: 0.78),
                         .init(color: .white.opacity(0.14), location: 1)
                     ],
-                    startPoint: .leading,
-                    endPoint: .trailing
+                    startPoint: side.innerUnitPoint,
+                    endPoint: side.outerUnitPoint
                 )
 
                 RadialGradient(
@@ -1071,7 +1073,7 @@ private struct HoverColorBloomView: View {
                         .white.opacity(0.05),
                         .clear
                     ],
-                    center: UnitPoint(x: pulse ? 0.80 : 0.74, y: pulse ? 0.50 : 0.42),
+                    center: UnitPoint(x: side.mirroredUnitX(pulse ? 0.80 : 0.74), y: pulse ? 0.50 : 0.42),
                     startRadius: 20,
                     endRadius: maxDimension * 0.54
                 )
@@ -1082,18 +1084,18 @@ private struct HoverColorBloomView: View {
                         .white.opacity(0.04),
                         .clear
                     ],
-                    center: UnitPoint(x: pulse ? 0.88 : 0.93, y: pulse ? 0.66 : 0.72),
+                    center: UnitPoint(x: side.mirroredUnitX(pulse ? 0.88 : 0.93), y: pulse ? 0.66 : 0.72),
                     startRadius: 8,
                     endRadius: maxDimension * 0.42
                 )
 
                 RippleRing(progress: revealProgress)
                     .frame(width: proxy.size.height * 1.55, height: proxy.size.height * 1.55)
-                    .position(x: proxy.size.width * 0.94, y: proxy.size.height * (pulse ? 0.54 : 0.5))
+                    .position(x: proxy.size.width * side.mirroredUnitX(0.94), y: proxy.size.height * (pulse ? 0.54 : 0.5))
                     .opacity(max(0, 1 - revealProgress) * 0.72)
             }
             .opacity(1)
-            .scaleEffect(0.98 + 0.04 * revealProgress, anchor: .trailing)
+            .scaleEffect(0.98 + 0.04 * revealProgress, anchor: side.outerUnitPoint)
             .blur(radius: 8)
             .blendMode(.screen)
             .mask {
@@ -1103,7 +1105,7 @@ private struct HoverColorBloomView: View {
                         .init(color: .white, location: 0.72),
                         .init(color: .white.opacity(0), location: 1)
                     ],
-                    center: UnitPoint(x: 0.96, y: 0.5),
+                    center: UnitPoint(x: side.mirroredUnitX(0.96), y: 0.5),
                     startRadius: max(0, ripple * 0.08),
                     endRadius: ripple
                 )
@@ -1116,8 +1118,8 @@ private struct HoverColorBloomView: View {
                         .init(color: .white.opacity(0.34), location: 0.62),
                         .init(color: .white, location: 1)
                     ],
-                    startPoint: .leading,
-                    endPoint: .trailing
+                    startPoint: side.innerUnitPoint,
+                    endPoint: side.outerUnitPoint
                 )
             }
         }
@@ -1190,23 +1192,28 @@ private struct HoverTextMagnet: ViewModifier {
 }
 
 private struct ProgressiveBlurView: NSViewRepresentable {
+    let side: SideSheetSide
+
     func makeNSView(context: Context) -> NSView {
-        ProgressiveBlurHostView()
+        ProgressiveBlurHostView(side: side)
     }
 
-    func updateNSView(_ nsView: NSView, context: Context) {}
+    func updateNSView(_ nsView: NSView, context: Context) {
+        (nsView as? ProgressiveBlurHostView)?.setSide(side)
+    }
 }
 
 private final class ProgressiveBlurHostView: NSView {
-    private let blurLayers: [(view: NSVisualEffectView, mask: CAGradientLayer)] = [
-        ProgressiveBlurHostView.makeBlurLayer(locations: [0, 0.18, 0.64, 1], opacities: [0, 0, 0.55, 1]),
-        ProgressiveBlurHostView.makeBlurLayer(locations: [0, 0.28, 0.72, 1], opacities: [0, 0, 0.72, 1]),
-        ProgressiveBlurHostView.makeBlurLayer(locations: [0, 0.46, 0.80, 1], opacities: [0, 0, 0.82, 1]),
-        ProgressiveBlurHostView.makeBlurLayer(locations: [0, 0.66, 0.88, 1], opacities: [0, 0, 0.88, 1])
-    ]
+    private let blurLayers: [(view: NSVisualEffectView, mask: CAGradientLayer)]
 
-    override init(frame frameRect: NSRect) {
-        super.init(frame: frameRect)
+    init(side: SideSheetSide) {
+        blurLayers = [
+            Self.makeBlurLayer(locations: [0, 0.18, 0.64, 1], opacities: [0, 0, 0.55, 1], side: side),
+            Self.makeBlurLayer(locations: [0, 0.28, 0.72, 1], opacities: [0, 0, 0.72, 1], side: side),
+            Self.makeBlurLayer(locations: [0, 0.46, 0.80, 1], opacities: [0, 0, 0.82, 1], side: side),
+            Self.makeBlurLayer(locations: [0, 0.66, 0.88, 1], opacities: [0, 0, 0.88, 1], side: side)
+        ]
+        super.init(frame: .zero)
         wantsLayer = true
         layer?.backgroundColor = NSColor.clear.cgColor
 
@@ -1233,7 +1240,20 @@ private final class ProgressiveBlurHostView: NSView {
         CATransaction.commit()
     }
 
-    private static func makeBlurLayer(locations: [NSNumber], opacities: [CGFloat]) -> (view: NSVisualEffectView, mask: CAGradientLayer) {
+    func setSide(_ side: SideSheetSide) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        blurLayers.forEach { layer in
+            Self.configure(mask: layer.mask, for: side)
+        }
+        CATransaction.commit()
+    }
+
+    private static func makeBlurLayer(
+        locations: [NSNumber],
+        opacities: [CGFloat],
+        side: SideSheetSide
+    ) -> (view: NSVisualEffectView, mask: CAGradientLayer) {
         let blur = NSVisualEffectView()
         blur.wantsLayer = true
         blur.material = .hudWindow
@@ -1244,10 +1264,14 @@ private final class ProgressiveBlurHostView: NSView {
         let mask = CAGradientLayer()
         mask.colors = opacities.map { NSColor.black.withAlphaComponent($0).cgColor }
         mask.locations = locations
-        mask.startPoint = CGPoint(x: 0, y: 0.5)
-        mask.endPoint = CGPoint(x: 1, y: 0.5)
+        configure(mask: mask, for: side)
         blur.layer?.mask = mask
 
         return (blur, mask)
+    }
+
+    private static func configure(mask: CAGradientLayer, for side: SideSheetSide) {
+        mask.startPoint = CGPoint(x: side == .left ? 1 : 0, y: 0.5)
+        mask.endPoint = CGPoint(x: side == .left ? 0 : 1, y: 0.5)
     }
 }

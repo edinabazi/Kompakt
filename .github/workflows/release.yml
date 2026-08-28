@@ -222,7 +222,7 @@ jobs:
           versioned_zip="$APP_NAME-${GITHUB_REF_NAME}.zip"
           echo "Copying release zip into appcast worktree"
           cp "build/$APP_NAME.zip" "build/pages/$versioned_zip"
-          printf '# %s %s\n\n- Added support for converting media files\n' "$APP_NAME" "$GITHUB_REF_NAME" > "build/pages/$APP_NAME-${GITHUB_REF_NAME}.md"
+          printf '# %s %s\n\n- Added a Position setting for choosing whether the drop zone appears on the left or right side of the screen\n' "$APP_NAME" "$GITHUB_REF_NAME" > "build/pages/$APP_NAME-${GITHUB_REF_NAME}.md"
           ls -lh "build/pages/$versioned_zip" "build/pages/$APP_NAME-${GITHUB_REF_NAME}.md"
 
           generate_appcast="$(find "$HOME/Library/Developer/Xcode/DerivedData" -path '*/SourcePackages/artifacts/sparkle/Sparkle/bin/generate_appcast' -type f | head -n 1)"
@@ -282,7 +282,7 @@ jobs:
             "build/$APP_NAME.dmg" \
             "build/$APP_NAME.dmg.sha256" \
             --title "$APP_NAME ${GITHUB_REF_NAME}" \
-            --notes "$(printf '%s\n' '- Added support for converting media files')"
+            --notes "$(printf '%s\n' '- Added a Position setting for choosing whether the drop zone appears on the left or right side of the screen')"
 
       - name: Delete temporary keychain
         if: always()

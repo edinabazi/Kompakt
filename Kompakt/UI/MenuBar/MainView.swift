@@ -525,6 +525,16 @@ struct MenuBarPopoverView: View {
 
                 PopoverDivider()
 
+                PopoverSegmentRow(title: "Position", subtitle: "Choose which side the drop zone opens on.") {
+                    PopoverSegmentedControl(
+                        selection: sideSheetSideBinding,
+                        options: SideSheetSide.allCases.map { ($0, $0.title) }
+                    )
+                }
+                .padding(.horizontal, 16)
+
+                PopoverDivider()
+
                 PopoverToggleRow(
                     title: "Launch at login",
                     subtitle: "Start Kompakt when you log in.",
@@ -608,6 +618,17 @@ struct MenuBarPopoverView: View {
             guard appModel.outputMode != mode else { return }
             DispatchQueue.main.async {
                 appModel.outputMode = mode
+            }
+        }
+    }
+
+    private var sideSheetSideBinding: Binding<SideSheetSide> {
+        Binding {
+            appModel.sideSheetSide
+        } set: { side in
+            guard appModel.sideSheetSide != side else { return }
+            DispatchQueue.main.async {
+                appModel.sideSheetSide = side
             }
         }
     }
@@ -1005,7 +1026,7 @@ private struct PopoverSegmentButtonStyle: ButtonStyle {
 enum MenuBarPopoverMetrics {
     static let width: CGFloat = 320
     static let historyHeight: CGFloat = 382
-    static let settingsHeight: CGFloat = 538
+    static let settingsHeight: CGFloat = 622
     static let footerHeight: CGFloat = 30
     static let size = NSSize(width: width, height: historyHeight)
     static let accentColor = Color(red: 0x10 / 255, green: 0x41 / 255, blue: 0xc7 / 255)

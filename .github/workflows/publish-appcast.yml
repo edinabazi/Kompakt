@@ -6,15 +6,15 @@ on:
       release_tag:
         description: "Release tag to publish"
         required: true
-        default: "v1.1.0"
+        default: "v1.1.1"
       build_version:
         description: "CFBundleVersion to add to the appcast"
         required: true
-        default: "7"
+        default: "8"
       release_note:
         description: "Single release note line"
         required: true
-        default: "Added support for converting media files"
+        default: "Added a Position setting for choosing whether the drop zone appears on the left or right side of the screen"
 
 permissions:
   contents: write

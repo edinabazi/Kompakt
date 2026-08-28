@@ -8,6 +8,74 @@ enum ExternalDropZoneMode: Equatable {
     case onboarding
 }
 
+enum SideSheetSide: String, CaseIterable, Identifiable {
+    case left
+    case right
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .left: "Left"
+        case .right: "Right"
+        }
+    }
+
+    var innerPaddingEdge: Edge.Set {
+        switch self {
+        case .left: .trailing
+        case .right: .leading
+        }
+    }
+
+    var innerUnitPoint: UnitPoint {
+        switch self {
+        case .left: .trailing
+        case .right: .leading
+        }
+    }
+
+    var outerUnitPoint: UnitPoint {
+        switch self {
+        case .left: .leading
+        case .right: .trailing
+        }
+    }
+
+    func mirroredUnitX(_ x: CGFloat) -> CGFloat {
+        self == .left ? 1 - x : x
+    }
+}
+
+enum ExternalDropZoneLayout {
+    static func panelFrame(
+        on screenFrame: NSRect,
+        visualWidth: CGFloat,
+        edgeGutter: CGFloat,
+        side: SideSheetSide
+    ) -> NSRect {
+        let panelWidth = min(visualWidth + edgeGutter, screenFrame.width)
+        let originX = side == .left ? screenFrame.minX : screenFrame.maxX - panelWidth
+
+        return NSRect(
+            x: originX,
+            y: screenFrame.minY,
+            width: panelWidth,
+            height: screenFrame.height
+        )
+    }
+
+    static func revealFrame(size: CGSize, side: SideSheetSide, isVisible: Bool) -> NSRect {
+        let hiddenOriginX = side == .left ? -size.width : size.width
+        return NSRect(
+            x: isVisible ? 0 : hiddenOriginX,
+            y: 0,
+            width: size.width,
+            height: size.height
+        )
+    }
+}
+
 @MainActor
 final class ExternalDropZoneController {
     private let appModel: AppModel
@@ -36,14 +104,22 @@ final class ExternalDropZoneController {
         }
 
         let screen = screenForMouse()
-        let frame = visibleFrame(on: screen)
+        let side = appModel.sideSheetSide
+        let frame = visibleFrame(on: screen, side: side)
 
         if let panel {
             presentation?.mode = mode
             presentation?.contentSize = frame.size
+            presentation?.side = side
             panel.setFrame(frame, display: true)
             if let revealContainerView, let dropZoneView {
-                configureRevealViews(container: revealContainerView, content: dropZoneView, size: frame.size, isVisible: false)
+                configureRevealViews(
+                    container: revealContainerView,
+                    content: dropZoneView,
+                    size: frame.size,
+                    side: side,
+                    isVisible: false
+                )
             }
             panel.orderFrontRegardless()
             startKeyDownMonitor()
@@ -54,8 +130,8 @@ final class ExternalDropZoneController {
             return
         }
 
-        let presentation = DropZonePresentation(mode: mode, contentSize: frame.size)
-        let effectLeadingGutter = edgeGutter
+        let presentation = DropZonePresentation(mode: mode, contentSize: frame.size, side: side)
+        let effectInnerGutter = edgeGutter
         let panel = DropZonePanel(
             contentRect: frame,
             styleMask: [.borderless, .nonactivatingPanel],
@@ -66,7 +142,7 @@ final class ExternalDropZoneController {
         let hostingController = NSHostingController(
             rootView: ExternalDropZonePresentationView(
                 presentation: presentation,
-                effectLeadingGutter: effectLeadingGutter
+                effectInnerGutter: effectInnerGutter
             )
                 .environmentObject(appModel)
         )
@@ -78,6 +154,7 @@ final class ExternalDropZoneController {
             container: revealContainerView,
             content: hostingController.view,
             size: frame.size,
+            side: side,
             isVisible: false
         )
 
@@ -206,13 +283,12 @@ final class ExternalDropZoneController {
         return NSScreen.screens.first { NSMouseInRect(mouseLocation, $0.frame, false) } ?? NSScreen.main ?? NSScreen.screens[0]
     }
 
-    private func visibleFrame(on screen: NSScreen) -> NSRect {
-        let panelWidth = min(visualWidth + edgeGutter, screen.frame.width)
-        return NSRect(
-            x: screen.frame.maxX - panelWidth,
-            y: screen.frame.minY,
-            width: panelWidth,
-            height: screen.frame.height
+    private func visibleFrame(on screen: NSScreen, side: SideSheetSide) -> NSRect {
+        ExternalDropZoneLayout.panelFrame(
+            on: screen.frame,
+            visualWidth: visualWidth,
+            edgeGutter: edgeGutter,
+            side: side
         )
     }
 
@@ -222,14 +298,27 @@ final class ExternalDropZoneController {
 
         guard let dropZoneView else { return }
         let size = presentation?.contentSize ?? dropZoneView.bounds.size
+        let side = presentation?.side ?? appModel.sideSheetSide
         if let revealContainerView {
-            configureRevealViews(container: revealContainerView, content: dropZoneView, size: size, isVisible: !isVisible)
+            configureRevealViews(
+                container: revealContainerView,
+                content: dropZoneView,
+                size: size,
+                side: side,
+                isVisible: !isVisible
+            )
         }
 
-        animateRevealView(dropZoneView, size: size, isVisible: isVisible, duration: duration)
+        animateRevealView(dropZoneView, size: size, side: side, isVisible: isVisible, duration: duration)
     }
 
-    private func configureRevealViews(container: NSView, content: NSView, size: CGSize, isVisible: Bool) {
+    private func configureRevealViews(
+        container: NSView,
+        content: NSView,
+        size: CGSize,
+        side: SideSheetSide,
+        isVisible: Bool
+    ) {
         container.frame = NSRect(origin: .zero, size: size)
         container.wantsLayer = true
         container.layer?.backgroundColor = NSColor.clear.cgColor
@@ -238,23 +327,20 @@ final class ExternalDropZoneController {
         content.wantsLayer = true
         content.layer?.backgroundColor = NSColor.clear.cgColor
         content.autoresizingMask = []
-        content.frame = revealFrame(size: size, isVisible: isVisible)
+        content.frame = ExternalDropZoneLayout.revealFrame(size: size, side: side, isVisible: isVisible)
     }
 
-    private func revealFrame(size: CGSize, isVisible: Bool) -> NSRect {
-        NSRect(
-            x: isVisible ? 0 : size.width,
-            y: 0,
-            width: size.width,
-            height: size.height
-        )
-    }
-
-    private func animateRevealView(_ view: NSView, size: CGSize, isVisible: Bool, duration: TimeInterval) {
+    private func animateRevealView(
+        _ view: NSView,
+        size: CGSize,
+        side: SideSheetSide,
+        isVisible: Bool,
+        duration: TimeInterval
+    ) {
         NSAnimationContext.runAnimationGroup { context in
             context.duration = duration
             context.timingFunction = CAMediaTimingFunction(controlPoints: 0.39, 0.57, 0.22, 0.95)
-            view.animator().frame = revealFrame(size: size, isVisible: isVisible)
+            view.animator().frame = ExternalDropZoneLayout.revealFrame(size: size, side: side, isVisible: isVisible)
         }
     }
 
@@ -269,19 +355,25 @@ final class DropZonePresentation: ObservableObject {
     var isVisible = false
     @Published var mode: ExternalDropZoneMode
     @Published var contentSize: CGSize
+    @Published var side: SideSheetSide
 
-    init(mode: ExternalDropZoneMode, contentSize: CGSize) {
+    init(mode: ExternalDropZoneMode, contentSize: CGSize, side: SideSheetSide) {
         self.mode = mode
         self.contentSize = contentSize
+        self.side = side
     }
 }
 
 private struct ExternalDropZonePresentationView: View {
     @ObservedObject var presentation: DropZonePresentation
-    let effectLeadingGutter: CGFloat
+    let effectInnerGutter: CGFloat
 
     var body: some View {
-        ExternalDropZoneView(effectLeadingGutter: effectLeadingGutter, mode: presentation.mode)
+        ExternalDropZoneView(
+            effectInnerGutter: effectInnerGutter,
+            mode: presentation.mode,
+            side: presentation.side
+        )
             .frame(width: presentation.contentSize.width, height: presentation.contentSize.height)
     }
 }

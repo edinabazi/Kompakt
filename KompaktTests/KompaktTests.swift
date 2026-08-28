@@ -4,6 +4,34 @@ import Testing
 @testable import Kompakt
 
 struct KompaktTests {
+    @Test func sideSheetLayoutUsesTheSelectedScreenEdge() {
+        let screen = NSRect(x: 120, y: 40, width: 1440, height: 900)
+        let leftFrame = ExternalDropZoneLayout.panelFrame(
+            on: screen,
+            visualWidth: 470,
+            edgeGutter: 96,
+            side: .left
+        )
+        let rightFrame = ExternalDropZoneLayout.panelFrame(
+            on: screen,
+            visualWidth: 470,
+            edgeGutter: 96,
+            side: .right
+        )
+
+        #expect(leftFrame == NSRect(x: 120, y: 40, width: 566, height: 900))
+        #expect(rightFrame == NSRect(x: 994, y: 40, width: 566, height: 900))
+    }
+
+    @Test func sideSheetRevealAnimationStartsOutsideItsSelectedEdge() {
+        let size = CGSize(width: 566, height: 900)
+
+        #expect(ExternalDropZoneLayout.revealFrame(size: size, side: .left, isVisible: false).origin.x == -566)
+        #expect(ExternalDropZoneLayout.revealFrame(size: size, side: .right, isVisible: false).origin.x == 566)
+        #expect(ExternalDropZoneLayout.revealFrame(size: size, side: .left, isVisible: true).origin.x == 0)
+        #expect(ExternalDropZoneLayout.revealFrame(size: size, side: .right, isVisible: true).origin.x == 0)
+    }
+
     @Test func detectsFileFormatsByBytes() throws {
         let directory = try temporaryDirectory()
 

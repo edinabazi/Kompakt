@@ -12,6 +12,7 @@ final class AppModel: ObservableObject {
     @AppStorage("defaultVideoMode") var defaultVideoMode: VideoCompressionMode = .sameResolution
     @AppStorage("successSoundEnabled") var successSoundEnabled = true
     @AppStorage("showEscapeHint") var showEscapeHint = true
+    @AppStorage("sideSheetSide") var sideSheetSide: SideSheetSide = .right
     @AppStorage("hasSeenFirstLaunchOnboarding") private var hasSeenFirstLaunchOnboarding = false
 
     private(set) var jobs: [CompressionJob] = []
