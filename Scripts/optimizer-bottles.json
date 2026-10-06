@@ -1,0 +1,92 @@
+{
+  "mozjpeg": {
+    "source": "https://raw.githubusercontent.com/Homebrew/homebrew-core/a9f7e8e67538dc07493368eaa149769dd3def7ee/Formula/m/mozjpeg.rb",
+    "upstream_url": "https://github.com/mozilla/mozjpeg/archive/refs/tags/v4.1.5.tar.gz",
+    "files": {
+      "arm64_sequoia": {
+        "url": "https://ghcr.io/v2/homebrew/core/mozjpeg/blobs/sha256:93eea531e7d81f0aade7c403f3e0c65d545d9eade6e0e50bd43bf01cee48f110",
+        "sha256": "93eea531e7d81f0aade7c403f3e0c65d545d9eade6e0e50bd43bf01cee48f110"
+      },
+      "sonoma": {
+        "url": "https://ghcr.io/v2/homebrew/core/mozjpeg/blobs/sha256:fcb0583588eeba6f707aea5899ad93dd5eb49d2982019a4836d817ae0dfbb8bf",
+        "sha256": "fcb0583588eeba6f707aea5899ad93dd5eb49d2982019a4836d817ae0dfbb8bf"
+      }
+    },
+    "version": "4.1.5"
+  },
+  "gifsicle": {
+    "source": "https://raw.githubusercontent.com/Homebrew/homebrew-core/a9f7e8e67538dc07493368eaa149769dd3def7ee/Formula/g/gifsicle.rb",
+    "upstream_url": "https://www.lcdf.org/gifsicle/gifsicle-1.96.tar.gz",
+    "files": {
+      "arm64_sequoia": {
+        "url": "https://ghcr.io/v2/homebrew/core/gifsicle/blobs/sha256:75b564ba2a3671f341b02b63b0a8429ea02db301a6ecf1ab346a31d158f44139",
+        "sha256": "75b564ba2a3671f341b02b63b0a8429ea02db301a6ecf1ab346a31d158f44139"
+      },
+      "sonoma": {
+        "url": "https://ghcr.io/v2/homebrew/core/gifsicle/blobs/sha256:fddb207d04bf9452a711aa8fdfad464e8a11ced975329263f41025abf1dfaa5c",
+        "sha256": "fddb207d04bf9452a711aa8fdfad464e8a11ced975329263f41025abf1dfaa5c"
+      }
+    },
+    "version": "1.96"
+  },
+  "jpegoptim": {
+    "source": "https://raw.githubusercontent.com/Homebrew/homebrew-core/a9f7e8e67538dc07493368eaa149769dd3def7ee/Formula/j/jpegoptim.rb",
+    "upstream_url": "https://github.com/tjko/jpegoptim/archive/refs/tags/v1.5.6.tar.gz",
+    "files": {
+      "arm64_sequoia": {
+        "url": "https://ghcr.io/v2/homebrew/core/jpegoptim/blobs/sha256:03905aa303c9a5d5b6669cac8f0c4f46fbf4fe3f54ede70d9bc8d958a1e486b3",
+        "sha256": "03905aa303c9a5d5b6669cac8f0c4f46fbf4fe3f54ede70d9bc8d958a1e486b3"
+      },
+      "sonoma": {
+        "url": "https://ghcr.io/v2/homebrew/core/jpegoptim/blobs/sha256:b2aafb2a469573baffe37024b1086c2b04512e2f3087c1c70100533e3733f866",
+        "sha256": "b2aafb2a469573baffe37024b1086c2b04512e2f3087c1c70100533e3733f866"
+      }
+    },
+    "version": "1.5.6"
+  },
+  "optipng": {
+    "source": "https://raw.githubusercontent.com/Homebrew/homebrew-core/a9f7e8e67538dc07493368eaa149769dd3def7ee/Formula/o/optipng.rb",
+    "upstream_url": "https://downloads.sourceforge.net/project/optipng/OptiPNG/optipng-7.9.1/optipng-7.9.1.tar.gz",
+    "files": {
+      "arm64_sequoia": {
+        "url": "https://ghcr.io/v2/homebrew/core/optipng/blobs/sha256:04c60466375077fc2707c4b663c4557f684c2a5a0ad6492f16e6b20faa8c02f9",
+        "sha256": "04c60466375077fc2707c4b663c4557f684c2a5a0ad6492f16e6b20faa8c02f9"
+      },
+      "sonoma": {
+        "url": "https://ghcr.io/v2/homebrew/core/optipng/blobs/sha256:fce585cdebd10bee1694e8b44078da666cd5d1459634f8ac22a8202711254a55",
+        "sha256": "fce585cdebd10bee1694e8b44078da666cd5d1459634f8ac22a8202711254a55"
+      }
+    },
+    "version": "7.9.1"
+  },
+  "libpng": {
+    "source": "https://raw.githubusercontent.com/Homebrew/homebrew-core/a9f7e8e67538dc07493368eaa149769dd3def7ee/Formula/lib/libpng.rb",
+    "upstream_url": "https://downloads.sourceforge.net/project/libpng/libpng16/1.6.58/libpng-1.6.58.tar.xz",
+    "files": {
+      "arm64_sequoia": {
+        "url": "https://ghcr.io/v2/homebrew/core/libpng/blobs/sha256:3d976f549e04ea0695078e5d8a3ae08c62e4dccd2b92f5b83c3ee9f1708c001b",
+        "sha256": "3d976f549e04ea0695078e5d8a3ae08c62e4dccd2b92f5b83c3ee9f1708c001b"
+      },
+      "sonoma": {
+        "url": "https://ghcr.io/v2/homebrew/core/libpng/blobs/sha256:c74a40635359b753e614fb0a69a32149179a27f79d3338d5c5b685f66e223967",
+        "sha256": "c74a40635359b753e614fb0a69a32149179a27f79d3338d5c5b685f66e223967"
+      }
+    },
+    "version": "1.6.58"
+  },
+  "jpeg-turbo": {
+    "source": "https://raw.githubusercontent.com/Homebrew/homebrew-core/a9f7e8e67538dc07493368eaa149769dd3def7ee/Formula/j/jpeg-turbo.rb",
+    "upstream_url": "https://github.com/libjpeg-turbo/libjpeg-turbo/releases/download/3.2.0/libjpeg-turbo-3.2.0.tar.gz",
+    "files": {
+      "arm64_sequoia": {
+        "url": "https://ghcr.io/v2/homebrew/core/jpeg-turbo/blobs/sha256:511445b91fe45351e3f7ae238ee7be0159fe92bb1e240a57489f62ded7fd1632",
+        "sha256": "511445b91fe45351e3f7ae238ee7be0159fe92bb1e240a57489f62ded7fd1632"
+      },
+      "sonoma": {
+        "url": "https://ghcr.io/v2/homebrew/core/jpeg-turbo/blobs/sha256:c1a02c5e74d687402700645d60f7045485d88ed9f2f615d301d1b081ad1e1f66",
+        "sha256": "c1a02c5e74d687402700645d60f7045485d88ed9f2f615d301d1b081ad1e1f66"
+      }
+    },
+    "version": "3.2.0"
+  }
+}

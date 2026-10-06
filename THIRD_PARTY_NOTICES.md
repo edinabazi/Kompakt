@@ -18,6 +18,7 @@ This file is a maintainer checklist, not legal advice. Confirm licenses and redi
 
 ## Maintainer Requirements
 
+- The image helper bottle versions, immutable Homebrew formula revisions, upstream source URLs, and per-architecture SHA-256 checksums are recorded in `Scripts/optimizer-bottles.json`.
 - Record the exact upstream version and source URL for every bundled binary.
 - Keep checksums for release artifacts.
 - Ensure non-system dynamic libraries are bundled and loaded with `@loader_path`.

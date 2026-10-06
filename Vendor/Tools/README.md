@@ -47,4 +47,6 @@ Scripts/fetch-ffmpeg-tools.sh
 
 The app intentionally does not use system installs or native fallbacks for supported formats.
 
+The Homebrew bottles are pinned by architecture and SHA-256 in `Scripts/optimizer-bottles.json`. This keeps matching Apple Silicon and Intel builds available when Homebrew removes older macOS bottles from its current metadata. To refresh them, update both architectures together using an immutable Homebrew formula revision and verify all helper libraries before shipping.
+
 Run `Scripts/verify-bundled-tools.sh` before shipping a release.

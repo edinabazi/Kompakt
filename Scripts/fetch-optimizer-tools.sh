@@ -3,6 +3,7 @@ set -eu
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 TOOLS_DIR="$ROOT_DIR/Vendor/Tools"
+BOTTLE_MANIFEST="$ROOT_DIR/Scripts/optimizer-bottles.json"
 TMP_DIR="$(mktemp -d)"
 
 cleanup() {
@@ -31,9 +32,8 @@ fetch_bottles() {
   mkdir -p "$dest"
 
   for formula in mozjpeg gifsicle jpegoptim optipng libpng jpeg-turbo; do
-    metadata="$(curl --fail --silent --show-error --location "https://formulae.brew.sh/api/formula/$formula.json")"
-    url="$(printf '%s' "$metadata" | jq -er --arg tag "$tag" '.bottle.stable.files[$tag].url')"
-    sha256="$(printf '%s' "$metadata" | jq -er --arg tag "$tag" '.bottle.stable.files[$tag].sha256')"
+    url="$(jq -er --arg formula "$formula" --arg tag "$tag" '.[$formula].files[$tag].url' "$BOTTLE_MANIFEST")"
+    sha256="$(jq -er --arg formula "$formula" --arg tag "$tag" '.[$formula].files[$tag].sha256' "$BOTTLE_MANIFEST")"
     token="$(curl --fail --silent --show-error --location \
       "https://ghcr.io/token?scope=repository:homebrew/core/$formula:pull&service=ghcr.io" | jq -er '.token')"
     bottle="$dest/$formula.tar.gz"
