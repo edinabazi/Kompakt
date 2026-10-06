@@ -169,7 +169,9 @@ final class ExternalDropZoneController {
         panel.acceptsMouseMovedEvents = true
         panel.setFrame(frame, display: true)
         panel.orderFrontRegardless()
-        panel.makeKeyAndOrderFront(nil)
+        if mode == .onboarding {
+            panel.makeKeyAndOrderFront(nil)
+        }
 
         self.panel = panel
         self.presentation = presentation

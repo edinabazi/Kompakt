@@ -105,6 +105,8 @@ final class ExternalDragMonitor {
         let endingSession = dragSession
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
             guard self?.dragSession == endingSession else { return }
+            // A queued mouse-up must not cancel a drag that is still being held.
+            guard NSEvent.pressedMouseButtons & 1 == 0 else { return }
             self?.appModel?.endExternalDrag(didDrop: false)
         }
     }

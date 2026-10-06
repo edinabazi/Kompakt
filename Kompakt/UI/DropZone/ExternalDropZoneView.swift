@@ -20,10 +20,7 @@ struct ExternalDropZoneView: View {
     @State private var previewTotalCount = 0
     @State private var fileSummary = OptimizableFileSummary.fallback
     @State private var completionSummary: CompressionBatchSummary?
-
-    private var appModel: AppModel {
-        AppModel.shared
-    }
+    @EnvironmentObject private var appModel: AppModel
 
     var body: some View {
         ZStack {
@@ -63,6 +60,7 @@ struct ExternalDropZoneView: View {
                     isTargeted: $isTargeted,
                     dragLocation: $dragLocation,
                     allowsConversion: showsConversionDropArea,
+                    onDragEntered: previewDraggedURLs,
                     onDrop: loadDroppedURLs
                 )
                     .ignoresSafeArea()
@@ -414,6 +412,11 @@ struct ExternalDropZoneView: View {
                 }
         }
         .buttonStyle(.plain)
+    }
+
+    private func previewDraggedURLs(_ urls: [URL]) {
+        guard mode == .drag else { return }
+        appModel.beginExternalDrag(urls: urls)
     }
 
     private func loadDroppedURLs(_ urls: [URL], action: DropZoneDropAction) {
@@ -869,6 +872,7 @@ private struct DropReceiverView: NSViewRepresentable {
     @Binding var isTargeted: Bool
     @Binding var dragLocation: CGPoint?
     let allowsConversion: Bool
+    let onDragEntered: ([URL]) -> Void
     let onDrop: ([URL], DropZoneDropAction) -> Void
 
     func makeNSView(context: Context) -> DropReceiverNSView {
@@ -876,6 +880,7 @@ private struct DropReceiverView: NSViewRepresentable {
         view.onTargetChanged = { isTargeted = $0 }
         view.onDragLocationChanged = { dragLocation = $0 }
         view.allowsConversion = allowsConversion
+        view.onDragEntered = onDragEntered
         view.onDrop = onDrop
         return view
     }
@@ -884,6 +889,7 @@ private struct DropReceiverView: NSViewRepresentable {
         nsView.onTargetChanged = { isTargeted = $0 }
         nsView.onDragLocationChanged = { dragLocation = $0 }
         nsView.allowsConversion = allowsConversion
+        nsView.onDragEntered = onDragEntered
         nsView.onDrop = onDrop
     }
 }
@@ -905,13 +911,15 @@ enum DropZoneDropAction: Equatable {
     }
 }
 
-private final class DropReceiverNSView: NSView {
+final class DropReceiverNSView: NSView {
     var onTargetChanged: ((Bool) -> Void)?
     var onDragLocationChanged: ((CGPoint?) -> Void)?
     var onDrop: (([URL], DropZoneDropAction) -> Void)?
+    var onDragEntered: (([URL]) -> Void)?
     var allowsConversion = false
     private var isTargeted = false
     private var acceptsCurrentDrag = false
+    private var currentDragURLs: [URL] = []
     private var lastDragLocation: CGPoint?
     private var lastHoveredDropAction: DropZoneDropAction?
     private let dragLocationThreshold: CGFloat = 0.05
@@ -929,8 +937,12 @@ private final class DropReceiverNSView: NSView {
     }
 
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
-        let acceptsDrop = acceptsFileURLs(from: sender)
+        currentDragURLs = ExternalDragClassifier.fileURLs(from: sender.draggingPasteboard)
+        let acceptsDrop = !currentDragURLs.isEmpty
         acceptsCurrentDrag = acceptsDrop
+        if acceptsDrop {
+            onDragEntered?(currentDragURLs)
+        }
         updateTargetState(acceptsDrop)
         updateDragLocation(acceptsDrop ? dragLocation(from: sender) : nil, force: true)
         return acceptsDrop ? .copy : []
@@ -944,18 +956,22 @@ private final class DropReceiverNSView: NSView {
 
     override func draggingExited(_ sender: NSDraggingInfo?) {
         acceptsCurrentDrag = false
+        currentDragURLs = []
         updateTargetState(false)
         updateDragLocation(nil, force: true)
     }
 
     override func prepareForDragOperation(_ sender: NSDraggingInfo) -> Bool {
-        acceptsCurrentDrag || acceptsFileURLs(from: sender)
+        acceptsCurrentDrag && !currentDragURLs.isEmpty
     }
 
     override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
-        let urls = supportedURLs(from: sender)
+        // Use the same resolved files for preview and processing, even if the
+        // pasteboard representation changes during the drag.
+        let urls = currentDragURLs
         let action = dropAction()
         acceptsCurrentDrag = false
+        currentDragURLs = []
         updateTargetState(false)
         updateDragLocation(nil, force: true)
 
@@ -966,6 +982,7 @@ private final class DropReceiverNSView: NSView {
 
     override func concludeDragOperation(_ sender: NSDraggingInfo?) {
         acceptsCurrentDrag = false
+        currentDragURLs = []
         updateTargetState(false)
         updateDragLocation(nil, force: true)
     }
@@ -978,14 +995,6 @@ private final class DropReceiverNSView: NSView {
         if isTargeted && !allowsConversion {
             NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
         }
-    }
-
-    private func supportedURLs(from sender: NSDraggingInfo) -> [URL] {
-        ExternalDragClassifier.fileURLs(from: sender.draggingPasteboard)
-    }
-
-    private func acceptsFileURLs(from sender: NSDraggingInfo) -> Bool {
-        ExternalDragClassifier.hasFileURLs(sender.draggingPasteboard)
     }
 
     private func dragLocation(from sender: NSDraggingInfo) -> CGPoint {

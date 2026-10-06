@@ -77,16 +77,16 @@ enum ExternalDragClassifier {
     }
 
     private static func fileURL(from item: NSPasteboardItem) -> URL? {
-        if let string = item.string(forType: .fileURL), let url = URL(string: string) {
+        if let string = item.string(forType: .fileURL), let url = filePathURL(from: string) {
             return url
         }
 
-        if let string = item.string(forType: .URL), let url = URL(string: string), url.isFileURL {
+        if let string = item.string(forType: .URL), let url = filePathURL(from: string) {
             return url
         }
 
         if let string = item.string(forType: .string) {
-            if let url = URL(string: string), url.isFileURL {
+            if let url = filePathURL(from: string) {
                 return url
             }
 
@@ -97,5 +97,12 @@ enum ExternalDragClassifier {
         }
 
         return nil
+    }
+
+    private static func filePathURL(from string: String) -> URL? {
+        // Finder can provide file-reference URLs. Resolve them before reading
+        // extensions or passing paths to the file collector and optimizers.
+        guard let url = NSURL(string: string), url.isFileURL else { return nil }
+        return url.filePathURL
     }
 }
