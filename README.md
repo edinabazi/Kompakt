@@ -4,6 +4,14 @@ A small macOS menu bar app for optimizing and converting media files.
 
 Kompakt stays out of the way until you need it. Start dragging a supported file and a dropzone appears on the right side of your screen. Drop the file in, choose whether to optimize or convert when both are available, and Kompakt handles the rest.
 
+## Install
+
+Download the latest [Kompakt.dmg](https://github.com/edinabazi/Kompakt/releases/latest/download/Kompakt.dmg), or install it with Homebrew:
+
+```sh
+brew install --cask edinabazi/tap/kompakt
+```
+
 ## How it works
 
 Drag a media file.

@@ -200,6 +200,7 @@ jobs:
           set -euo pipefail
 
           ./Scripts/create-dmg.sh "$EXPORT_PATH/$APP_NAME.app" "build/$APP_NAME.dmg"
+          codesign --sign "Developer ID Application" --timestamp --keychain "$KEYCHAIN_PATH" "build/$APP_NAME.dmg"
 
       - name: Notarize release DMG
         env:
@@ -303,6 +304,37 @@ jobs:
             "build/$APP_NAME.dmg.sha256" \
             --title "$APP_NAME ${GITHUB_REF_NAME}" \
             --notes-file build/release-notes.md
+
+      - name: Check out Homebrew tap
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: actions/checkout@v4
+        with:
+          repository: edinabazi/homebrew-tap
+          ssh-key: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
+          path: build/tap
+
+      - name: Update Homebrew cask
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          set -euo pipefail
+
+          export VERSION="${GITHUB_REF_NAME#v}"
+          export SHA="$(cut -d' ' -f1 "build/$APP_NAME.dmg.sha256")"
+
+          perl -0pi -e '
+            s/version "[^"]+"/version "$ENV{VERSION}"/;
+            s/sha256 "[0-9a-f]{64}"/sha256 "$ENV{SHA}"/;
+          ' build/tap/Casks/kompakt.rb
+
+          cd build/tap
+          if git diff --quiet; then
+            echo "Cask already points at $VERSION"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "kompakt $VERSION"
+          git push
 
       - name: Delete temporary keychain
         if: always()
